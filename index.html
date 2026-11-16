@@ -229,7 +229,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
       <h2>Song parts</h2>
       <button class="btn primary" id="songPlayBtn" type="button">Play song</button>
     </div>
-    <p class="small">Tap Listen to hear one part on its own, from where it comes in. The part that carries the tune is the one to use as the melody. Parts switched off are left out of Play song; the chords are still read from every part.</p>
+    <p class="small">Tap Listen to hear one part on its own, from where it comes in. The part that carries the tune is the one to use as the melody. The part tagged Chords is the one shown when you pick the As played voicing. Parts switched off are left out of Play song; the chords are still read from every part.</p>
     <div class="parts" id="partsList"></div>
   </section>
 
@@ -868,7 +868,7 @@ function analyze(raw,o){
   if(o.score&&ns.length){sc=quantize(ns,o.score);ns=sc.mel;}
   const key=o.keySel==='auto'?detectKey(ns):makeKey(+o.keySel.split(':')[0],o.keySel.split(':')[1]);
   let fixed=null;
-  if(sc&&o.song){const r=songSegments(sc,o.song,key,o.vocab);sc.segs=r.segs;sc.segStarts=r.starts;fixed=r.fixed;}
+  if(sc&&o.song&&o.song.fixed){const r=songSegments(sc,o.song,key,o.vocab);sc.segs=r.segs;sc.segStarts=r.starts;fixed=r.fixed;}
   const segs=sc?sc.segs:segment(ns,o.seg);
   const h=harmonize(segs,key,o.vocab,o.pins,!sc&&o.seg==='n1',fixed);
   const prevBy={};
@@ -881,6 +881,12 @@ function analyze(raw,o){
       v.id=id;v.name=STRATEGIES[id].name;v.adds=describeAdds(v,ch,o.vocab.sevenths);
       return v;
     });
+    if(sc&&o.song&&o.song.played){
+      const st=sc.segStarts[i],en=i+1<segs.length?sc.segStarts[i+1]:sc.total;
+      const pv=playedVoicing(o.song.played,st+o.song.off,Math.max(2,Math.min(sc.W,en-st)))||Object.assign({},voicings[0],{rest:true});
+      pv.id='played';pv.name='As played';pv.adds=pv.rest?'nothing played here · built-in voicing':'from '+o.song.playedName;
+      voicings.push(pv);
+    }
     return {notes:seg,own:!seg.length&&!(seg.sounding&&seg.carry.midi===T0),fromSong:!!(fixed&&fixed[i]&&fixed[i].id===ch.id),target:T0,shift:T-T0,chord:ch,symbol:symbol(ch,key,o.vocab.sevenths),roman:roman(ch,key,o.vocab.sevenths),
       alts:h[i].alts.map(c=>({id:c.id,symbol:symbol(c,key,o.vocab.sevenths)})),pinned:h[i].pinned,voicings};
   });
@@ -1028,7 +1034,7 @@ function rateParts(song){
     if(/bass|drum|perc|pad|chord|comp|rhythm|harmon|backing|strings|ooh|aah|choir/i.test(pt.name))s-=2;
     if(pt.ch===3)s+=.6;   /* song files made for karaoke usually keep the tune on channel 4 */
     if(pt.fam==='Bass')s-=2;
-    pt.mono=mono;pt.score=s;
+    pt.mono=mono;pt.score=s;pt.cover=act.size/bars;
   });
   let best=0;
   song.parts.forEach((pt,i)=>{if(pt.score>song.parts[best].score)best=i;});
@@ -1064,6 +1070,36 @@ function songInput(song,idx){
   const odd=mel.filter(n=>{const x=s16(n.on),r=Math.round(x);return Math.abs(x-r)<.26&&r%2!==0;}).length;
   const key=detectKey(flat(pitched).map(n=>({midi:n.midi,w:n.e-n.s})));
   return {notes,q,beats,off,harm,grid:odd/mel.length>.12?1:2,key,count:mel.length,alone:!others.length};
+}
+/* the part that most looks like someone playing the chords: several notes at once, present through the song, ideally keys */
+function chordPart(song,mel){
+  let best=-1,bs=0;
+  song.parts.forEach((pt,i)=>{
+    if(pt.drum||i===mel||pt.fam==='Bass'||pt.notes.length<20||pt.mono>=.7)return;
+    const s=(pt.cover||0)+(pt.fam==='Piano'||pt.fam==='Organ'?.5:pt.fam==='Guitar'?.2:0);
+    if(s>bs){bs=s;best=i;}
+  });
+  return best;
+}
+function partNotes(song,i){return song.parts[i].notes.map(n=>({midi:n.midi,s:n.on/song.ppq*4,e:n.off/song.ppq*4})).sort((a,b)=>a.s-b.s);}
+/* the notes a part actually plays as a chord starts, trimmed to what two hands can hold */
+function playedVoicing(notes,a,W){
+  const grab=win=>{
+    const set=new Set();
+    for(const n of notes){
+      if(n.s>=a+win)break;
+      if(n.e<=a+.25)continue;
+      if(Math.min(n.e,a+win)-Math.max(n.s,a)>=.5)set.add(n.midi);
+    }
+    return [...set].sort((x,y)=>x-y);
+  };
+  let all=grab(Math.min(4,W));
+  if(!all.length)all=grab(W);
+  if(!all.length)return null;
+  let lh=all.filter(m=>m<60),rh=all.filter(m=>m>=60);
+  lh=lh.filter(m=>m-lh[0]<=12).slice(0,4);
+  rh=rh.filter(m=>rh[rh.length-1]-m<=12).slice(-5);
+  return {lh,rh,T:-1,played:true};
 }
 /* the chord the song plays between two points (in sixteenths of the song), or null when nothing pitched sounds */
 const TEMPL={maj:{t:[0,4,7],n:[2,9,11]},min:{t:[0,3,7],n:[2,5,10]},dom:{t:[0,4,7,10],n:[2,9]},hdim:{t:[0,3,6,10],n:[]},dim:{t:[0,3,6],n:[9]}};
@@ -1125,7 +1161,7 @@ function carryTarget(m,ch){
   for(let d=1;d<=6;d++){if(f(m-d)>=.9)return m-d;if(f(m+d)>=.9)return m+d;}
   return m;
 }
-if(typeof module!=='undefined')module.exports={parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
+if(typeof module!=='undefined')module.exports={chordPart,partNotes,parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
 </script>
 
 <script>
@@ -1452,12 +1488,13 @@ function renderParts(){
   $('partsList').innerHTML=order.map(i=>{
     const pt=d.parts[i],mel=i===sg.part,off=!!sg.muted[i],solo=songPlay&&songPlay.solo===i;
     return '<div class="part'+(mel?' mel':'')+(off?' off':'')+'">'+
-      '<div class="row spread"><span class="pname">'+esc(pt.drum&&!/drum|kit|perc/i.test(pt.name)?'Drums ('+pt.name+')':pt.name)+'</span>'+(mel?'<span class="tag mel">Melody</span>':i===sg.guess?'<span class="small">likely melody</span>':'')+
+      '<div class="row spread"><span class="pname">'+esc(pt.drum&&!/drum|kit|perc/i.test(pt.name)?'Drums ('+pt.name+')':pt.name)+'</span>'+(mel?'<span class="tag mel">Melody</span>':i===sg.chordPart?'<span class="tag rh">Chords</span>':i===sg.guess?'<span class="small">likely melody</span>':'')+
       '<span class="small">'+pt.notes.length+' notes · '+(pt.drum?'drums':pt.mono>.85?'one note at a time':'chords')+'</span></div>'+
       '<canvas data-roll="'+i+'" aria-hidden="true"></canvas>'+
       '<div class="row"><button class="btn" type="button" data-listen="'+i+'" aria-pressed="'+!!solo+'">'+(solo?'Stop':'Listen')+'</button>'+
       '<button class="btn" type="button" data-mute="'+i+'" aria-pressed="'+!off+'">'+(off?'Off':'On')+'</button>'+
-      (pt.drum||mel?'':'<button class="btn" type="button" data-usemel="'+i+'">Use as melody</button>')+'</div></div>';
+      (pt.drum||mel?'':'<button class="btn" type="button" data-usemel="'+i+'">Use as melody</button>')+
+      (pt.drum||mel||i===sg.chordPart||pt.mono>.85?'':'<button class="btn" type="button" data-usechords="'+i+'">Show its chords</button>')+'</div></div>';
   }).join('');
   requestAnimationFrame(drawRolls);
 }
@@ -1533,9 +1570,14 @@ function playSong(solo){
   if(a.state==='running')go();else a.resume().then(go).catch(()=>{});
   renderParts();
 }
+function setChordPart(i){
+  const sg=S.song;sg.chordPart=i;
+  sg.played=i>=0?partNotes(sg.data,i):null;sg.playedName=i>=0?sg.data.parts[i].name:'';
+}
 function useSongPart(i,first){
   const sg=S.song,r=songInput(sg.data,i);
   Object.assign(sg,{part:i,q:r.q,beats:r.beats,off:r.off,harm:r.harm});if(first){sg.guess=i;sg.muted={};}
+  if(first||sg.chordPart===i)setChordPart(chordPart(sg.data,i));
   S.notes=r.notes;S.held.clear();S.pins={};S.demo=sg.name;cleanState=null;
   if(first){S.grid=r.grid;S.keySel=r.key.tonic+':'+r.key.mode;S.demoKey=true;S.input='score';S.scoreVoicing=0;}
   stopAll();save();renderControls();songUi();update();
@@ -1689,14 +1731,14 @@ function voicingHtml(v,key,lo,hi,ref,ch){
   const rh=v.rh.filter(n=>n!==v.T);
   return '<div class="voicing"><div class="vname"><span>'+esc(v.name)+'</span><span class="adds">'+esc(v.adds||'')+'</span></div>'+
     '<button class="kbtn" type="button" data-play="'+ref+'" aria-label="Play '+esc(v.name)+'">'+kbSvg(v,lo,hi)+'</button>'+
-    '<div class="notes">'+(v.lh.length?'<span class="tag lh">LH</span>'+names(v.lh)+' ':'')+(rh.length?'<span class="tag rh">RH</span>'+names(rh)+' ':'')+'<span class="tag mel">Top</span>'+noteName(v.T,key)+'</div>'+
+    '<div class="notes">'+(v.lh.length?'<span class="tag lh">LH</span>'+names(v.lh)+' ':'')+(rh.length?'<span class="tag rh">RH</span>'+names(rh)+' ':'')+(v.T>=0?'<span class="tag mel">Top</span>'+noteName(v.T,key):'')+'</div>'+
     (v.tip?'<div class="tip">'+esc(v.tip)+'</div>':'')+'</div>';
 }
 function run(){
   const st=settings();
   return analyze(S.notes,{now:performance.now(),keySel:S.keySel,seg:S.seg,vocab:st.vocab,strategies:st.strategies,pins:S.pins,
     score:S.input==='score'?{beats:+S.meter||(S.song?S.song.beats:0),grid:+S.grid,scale:S.song?1:(+S.qscale||1),chordEvery:S.every,q:S.song?S.song.q:0}:null,
-    song:S.song&&S.chordSrc==='song'?{harm:S.song.harm,off:S.song.off}:null});
+    song:S.song?{harm:S.song.harm,off:S.song.off,fixed:S.chordSrc==='song',played:S.song.played||null,playedName:S.song.playedName||''}:null});
 }
 function drawMelody(M){
   const key=M.key;lastMel=M;$('melPlay').disabled=!M.count;
@@ -2178,6 +2220,7 @@ function init(){
       renderParts();
     }
     else if(b.dataset.usemel!=null)useSongPart(+b.dataset.usemel,false);
+    else if(b.dataset.usechords!=null){setChordPart(+b.dataset.usechords);stopAll();renderParts();update();}
   };
   ['srcSel','srcSel2'].forEach(id=>{$(id).onchange=e=>{S.chordSrc=e.target.value;S.scoreVoicing=0;stopAll();changed();songUi();};});
   $('playAll').onclick=playAll;
