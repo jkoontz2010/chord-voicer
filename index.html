@@ -198,6 +198,12 @@ h2.tview{font-size:1.5rem}
 .tcoach li{margin-bottom:4px}
 .tcoach p+h3,.tcoach ol+h3{margin-top:12px}
 #tJump{max-width:min(46vw,300px)}
+#tSheet{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px}
+#tSheet svg{display:block;width:100%;height:auto}
+.tsel{fill:transparent;cursor:pointer}
+.tsel.on{fill:var(--accent);fill-opacity:.12}
+.tsl{font:500 8.5px var(--mono);fill:var(--muted)}
+.tsn{font:500 7px var(--mono);fill:var(--muted)}
 </style>
 </head>
 <body>
@@ -395,6 +401,23 @@ h2.tview{font-size:1.5rem}
     </div>
     <button class="btn primary" id="tClose" type="button">Back to editing</button>
   </div>
+  <section class="panel" aria-label="Melody input">
+    <div class="row spread">
+      <h2>Your melody</h2>
+      <div class="row">
+        <button class="btn primary" id="tRec" type="button">Record a new melody</button>
+        <button class="btn" id="tUndo" type="button" hidden>Undo note</button>
+        <button class="btn" id="tMelPlay" type="button">Play melody</button>
+      </div>
+    </div>
+    <div class="kb" id="tKb" aria-label="On-screen piano for your melody"></div>
+    <div class="row">
+      <button class="btn" id="tOctDown" type="button" aria-label="Shift keys down an octave">Octave −</button>
+      <button class="btn" id="tOctUp" type="button" aria-label="Shift keys up an octave">Octave +</button>
+      <label class="row small">Key <select id="tKeySel" aria-label="Key of the melody"></select></label>
+      <p class="status" id="tMelStatus" style="flex:1;min-width:220px"></p>
+    </div>
+  </section>
   <section class="panel" aria-label="What to practise">
     <div class="row">
       <label class="field">Practise <select id="tTopic"></select></label>
@@ -419,7 +442,14 @@ h2.tview{font-size:1.5rem}
       <div class="row"><span class="badge" id="tProg"></span><button class="btn" id="tGot" type="button" aria-pressed="false">Got it</button></div>
     </div>
     <div class="tbar" aria-hidden="true"><i id="tBarFill"></i></div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="Layout">
+        <button type="button" id="tViewSheet" aria-pressed="true">All on one sheet</button>
+        <button type="button" id="tViewStep" aria-pressed="false">One at a time</button>
+      </div>
+    </div>
     <div class="row" id="tShow" role="group" aria-label="What to show"></div>
+    <div id="tSheet"></div>
     <div id="tCard"></div>
     <div class="row">
       <button class="btn primary" id="tHear" type="button">Hear it</button>
@@ -441,7 +471,7 @@ h2.tview{font-size:1.5rem}
     <p class="status" id="tAskStatus" hidden></p>
   </section>
   <div class="swatches"><span><i class="sw" style="background:var(--lh)"></i>Left hand</span><span><i class="sw" style="background:var(--rh)"></i>Right hand</span><span><i class="sw" style="background:var(--mel)"></i>Melody</span><span><i class="sw" style="background:var(--accent);border-radius:50%"></i>What you are playing</span></div>
-  <p class="small">Nothing here is graded. Tap the keys of the picture (on a phone it slides sideways), or play your MIDI piano, and the dots show where your hands are. Arrow keys move between steps and the space bar plays the chord.</p>
+  <p class="small">Nothing here is graded. Tap the keys of the picture (on a phone it slides sideways), or play your MIDI piano, and the dots show where your hands are. On the sheet, tap a bar to hear it and see it on the keys. Arrow keys move between steps and the space bar plays the chord.</p>
 </div>
 
 <script id="engine">
@@ -1251,6 +1281,7 @@ function carryTarget(m,ch){
 }
 /* ---------- teaching mode: exercises built from a song's chords, or from all twelve keys ---------- */
 const INV_NAME=['Root position','1st inversion','2nd inversion','3rd inversion'];
+const INV_SHORT=['Root','1st inv','2nd inv','3rd inv'];
 const TONE_NAME=['root','3rd','5th','7th'];
 const FIFTHS_ORDER=[0,7,2,9,4,11,6,1,8,3,10,5];
 const TEACH={
@@ -1323,7 +1354,7 @@ function teachSteps(o){
       iv.forEach((x,k)=>{
         const ns=invNotes(p.ch,sev,k,r0+x);
         const v=o.hand==='lh'?{lh:ns,rh:[],T:-1}:o.hand==='both'?{lh:ns.map(n=>n-12),rh:ns,T:-1}:{lh:[],rh:ns,T:-1};
-        steps.push(Object.assign(base(p),{label:INV_NAME[k],v,id:['inv',p.ch.id,sev?7:3,k].join('|'),
+        steps.push(Object.assign(base(p),{label:INV_NAME[k],short:INV_SHORT[k],first:k===0,v,id:['inv',p.ch.id,sev?7:3,k].join('|'),
           how:'Bottom to top: '+ns.map(n=>nm(n,p)).join(' ')+' ('+ns.map(n=>tn(n,p)).join(', ')+'). The '+TONE_NAME[k]+' is the lowest note.'+(o.hand==='both'?' Same notes in both hands, an octave apart.':'')}));
       });
     });
@@ -1338,20 +1369,20 @@ function teachSteps(o){
        ['Root in the left, 7th under 3rd in the right',{lh:[R2],rh:[s7,atOrAbove(mod(r+th,12),s7+1)],T:-1},'The same two guide tones flipped: 7th on the bottom, 3rd on top.']
       ].forEach(([label,v,why],k)=>{
         const all=v.lh.concat(v.rh);
-        steps.push(Object.assign(base(p),{label,v,id:['shell',p.ch.id,k].join('|'),how:'Bottom to top: '+all.map(n=>nm(n,p)).join(' ')+' ('+all.map(n=>tn(n,p)).join(', ')+'). '+why}));
+        steps.push(Object.assign(base(p),{label,short:['R 7','R 3','R 3 7','R | 3 7','R | 7 3'][k],first:k===0,v,id:['shell',p.ch.id,k].join('|'),how:'Bottom to top: '+all.map(n=>nm(n,p)).join(' ')+' ('+all.map(n=>tn(n,p)).join(', ')+'). '+why}));
       });
     });
   }else if(drill==='lead'){
     let prev=null;
     seq.forEach((p,i)=>{
       const r=p.ch.root,iv=chordIv(p.ch,sev),cands=[];
-      if(o.topic==='inv')iv.forEach((x,k)=>[48,60].forEach(lo=>{const ns=invNotes(p.ch,sev,k,atOrAbove(mod(r+x,12),lo));if(ns[0]>=50&&ns[0]<=67)cands.push({ns,k,label:INV_NAME[k]});}));
-      else [[1,3,'3rd under 7th'],[3,1,'7th under 3rd']].forEach(([a,b,label],k)=>[48,60].forEach(lo=>{
+      if(o.topic==='inv')iv.forEach((x,k)=>[48,60].forEach(lo=>{const ns=invNotes(p.ch,sev,k,atOrAbove(mod(r+x,12),lo));if(ns[0]>=50&&ns[0]<=67)cands.push({ns,k,label:INV_NAME[k],short:INV_SHORT[k]});}));
+      else [[1,3,'3rd under 7th','3 7'],[3,1,'7th under 3rd','7 3']].forEach(([a,b,label,short],k)=>[48,60].forEach(lo=>{
         const x=atOrAbove(mod(r+iv[a],12),lo),ns=[x,atOrAbove(mod(r+iv[b],12),x+1)];
-        if(x>=50&&x<=66)cands.push({ns,k,label});
+        if(x>=50&&x<=66)cands.push({ns,k,label,short});
       }));
       const c=pick(cands,prev);
-      steps.push(Object.assign(base(p),{label:c.label+(o.topic==='inv'?', root in the left hand':', root below'),v:{lh:[atOrAbove(r,36)],rh:c.ns,T:-1},
+      steps.push(Object.assign(base(p),{label:c.label+(o.topic==='inv'?', root in the left hand':', root below'),short:c.short,first:true,v:{lh:[atOrAbove(r,36)],rh:c.ns,T:-1},
         id:[o.topic,'lead',o.src,tag,i].join('|'),how:'Right hand: '+c.ns.map(n=>nm(n,p)).join(' ')+' ('+c.ns.map(n=>tn(n,p)).join(', ')+'). '+move(prev,c.ns,p)}));
       prev=c.ns;
     });
@@ -1370,7 +1401,7 @@ function teachSteps(o){
         label='Root and '+tn(v.lh[1],p)+(under.length?', '+tn(under[0],p)+' under the melody':', melody alone on top');
         how='Left hand: '+v.lh.map(n=>nm(n,p)).join(' ')+' ('+v.lh.map(n=>tn(n,p)).join(', ')+'). Right hand: '+(under.length?nm(under[0],p)+' (the '+tn(under[0],p)+') under ':'only ')+'the melody note '+nm(T,p)+'.';
       }
-      steps.push(Object.assign(base(p),{label,v,how,id:[o.topic,'top',tag,i].join('|')}));
+      steps.push(Object.assign(base(p),{label,short:o.topic==='inv'?(label.indexOf(',')>0?INV_SHORT[INV_NAME.indexOf(label.split(',')[0])]:'under mel'):'shell',first:true,v,how,id:[o.topic,'top',tag,i].join('|')}));
     });
   }
   return steps;
@@ -1618,7 +1649,7 @@ function cleanUp(){
 function dropDemo(){S.demo=false;if(S.song){S.song=null;songUi();}if(S.demoKey){S.demoKey=false;S.keySel='auto';$('keySel').value='auto';}}
 /* note capture */
 function noteOn(midi,vel,src){
-  if(TM.open){teachKey(midi,true);if(S.monitor)tone(midi,0,1.4,vel||.6);return;}   /* teaching mode listens, it never records */
+  if(TM.open&&!TM.rec){lightKey(midi,true);teachKey(midi,true);if(S.monitor)tone(midi,0,1.4,vel||.6);return;}   /* teaching mode only records while its Record button is on */
   if(S.demo){S.notes=[];dropDemo();S.pins={};}
   lightKey(midi,true);
   if(S.monitor)tone(midi,0,1.4,vel||.6);
@@ -1630,7 +1661,7 @@ function noteOn(midi,vel,src){
   schedule();
 }
 function noteOff(midi){
-  if(TM.open){teachKey(midi,false);return;}
+  if(TM.open&&!TM.rec){lightKey(midi,false);teachKey(midi,false);return;}
   lightKey(midi,false);
   const n=S.held.get(midi);
   if(n){n.off=performance.now();S.held.delete(midi);schedule();}
@@ -1883,8 +1914,9 @@ async function connectMidi(){
 
 /* on-screen keys */
 const KEYMAP='awsedftgyhujkolp;';
-function buildKb(){
-  const kb=$('kb');kb.innerHTML='';
+function buildKb(){['kb','tKb'].forEach(id=>buildKbIn($(id)));}
+function buildKbIn(kb){
+  kb.innerHTML='';
   const lo=S.base,hi=S.base+24,isB=n=>[1,3,6,8,10].includes(n%12);
   const whites=[];for(let n=lo;n<=hi;n++)if(!isB(n))whites.push(n);
   whites.forEach(n=>{
@@ -1899,7 +1931,7 @@ function buildKb(){
     kb.appendChild(k);
   }
 }
-function lightKey(m,on){const k=$('kb').querySelector('[data-m="'+m+'"]');if(k)k.classList.toggle('on',on);}
+function lightKey(m,on){['kb','tKb'].forEach(id=>{const k=$(id).querySelector('[data-m="'+m+'"]');if(k)k.classList.toggle('on',on);});}
 const ptr=new Map();
 function kbDown(e){
   const m=e.target&&e.target.dataset&&e.target.dataset.m;if(m==null)return;
@@ -1965,7 +1997,7 @@ function run(){
     song:S.song?{harm:S.song.harm,off:S.song.off,fixed:S.chordSrc==='song',played:S.song.played||null,playedName:S.song.playedName||''}:null});
 }
 function drawMelody(M){
-  const key=M.key;lastMel=M;$('melPlay').disabled=!M.count;
+  const key=M.key;lastMel=M;if(TM.open)teachMelStatus();$('melPlay').disabled=!M.count;
   const cleaned=canUndoClean();
   $('cleanBtn').textContent=cleaned?'Undo clean-up':'Clean up';$('cleanBtn').disabled=!cleaned&&(M.count<2||!!S.demo);
   if(!cleaned)$('cleanMsg').hidden=true;
@@ -2392,14 +2424,14 @@ async function askClaude(){
 
 /* ---------- teaching mode: pick what to practise, step through it, hide what you want to memorise ---------- */
 const TKEY='chordVoicer.teach';
-const TM={open:false,topic:'inv',drill:'each',src:'song',size:'3',hand:'rh',order:'seq',hide:{},got:{},i:0,steps:[],peek:false,run:null,plan:null,lo:48,hi:71};
-try{const s=JSON.parse(localStorage.getItem(TKEY)||'null');if(s)['topic','drill','src','size','hand','order','hide','got'].forEach(k=>{if(s[k]!=null)TM[k]=s[k];});}catch(e){}
+const TM={view:'sheet',rec:false,open:false,topic:'inv',drill:'each',src:'song',size:'3',hand:'rh',order:'seq',hide:{},got:{},i:0,steps:[],peek:false,run:null,plan:null,lo:48,hi:71};
+try{const s=JSON.parse(localStorage.getItem(TKEY)||'null');if(s)['topic','drill','src','size','hand','order','hide','got','view'].forEach(k=>{if(s[k]!=null)TM[k]=s[k];});}catch(e){}
 if(!TEACH[TM.topic])TM.topic='inv';
 if(!TEACH[TM.topic].drills[TM.drill])TM.drill='each';
 if(!['song','maj12','min12','dom12'].includes(TM.src))TM.src='song';
 if(typeof TM.hide!=='object'||!TM.hide)TM.hide={};
 if(typeof TM.got!=='object'||!TM.got)TM.got={};
-function teachSave(){try{localStorage.setItem(TKEY,JSON.stringify({topic:TM.topic,drill:TM.drill,src:TM.src,size:TM.size,hand:TM.hand,order:TM.order,hide:TM.hide,got:TM.got}));}catch(e){}}
+function teachSave(){try{localStorage.setItem(TKEY,JSON.stringify({view:TM.view,topic:TM.topic,drill:TM.drill,src:TM.src,size:TM.size,hand:TM.hand,order:TM.order,hide:TM.hide,got:TM.got}));}catch(e){}}
 const TSHOW={name:'Chord name',kb:'Key placements',fing:'Finger numbers',staff:'Sheet music',notes:'Note names'};
 const TPRESET={learn:['Learn: show everything',[]],recall:['Recall: name only',['kb','fing','staff','notes']],read:['Read: sheet music only',['name','kb','fing','notes']],ear:['By ear: hide it all',['name','kb','fing','staff','notes']]};
 const tCur=()=>TM.steps[TM.i]||null;
@@ -2456,40 +2488,106 @@ function tKbSvg(v,lo,hi,show,fing){
   }
   return s+dots+'</svg>';
 }
-/* the step's notes on a grand staff, as one whole-note chord with every accidental written out */
-function tStaff(v,ch,key){
-  const ks=keySig(key),X=92,staves=[{top:38,bot:30,clef:'g',ns:[]},{top:108,bot:18,clef:'f',ns:[]}];
-  const hand=n=>n===v.T?'mel':v.lh.includes(n)?'lh':'rh';
-  /* two hands: left on the bass staff, right on the treble, so the hands read apart; one hand: split at middle C */
-  const two=v.lh.length&&v.rh.length;
-  uniq(v.lh.concat(v.rh)).forEach(n=>staves[(two?(v.lh.includes(n)?n>=65:n>=55):n>=60)?0:1].ns.push(n));
-  let g='';
-  staves.forEach(st=>{
-    const Y=step=>st.top+32-(step-st.bot)*4;
-    for(let l=0;l<5;l++)g+=L(8,st.top+l*8,140,st.top+l*8,'sl');
-    g+=clefSvg(st.clef,13,st.top);
-    const hs=st.ns.map(n=>{const sp=spellChord(n,ch,key,ks);return {n,sp,y:Y(sp.step),off:0};}).sort((a,b)=>a.sp.step-b.sp.step);
-    for(let i=1;i<hs.length;i++)if(hs[i].sp.step-hs[i-1].sp.step<=1&&!hs[i-1].off)hs[i].off=9.6;
-    let pStep=99,pCol=0;const led={};
-    hs.slice().reverse().forEach(h=>{
-      if(h.sp.acc){
-        const col=pStep-h.sp.step<6?(pCol+1)%3:0;
-        g+=TX(X-11-col*7.5,h.y+(h.sp.acc<0?3.5:4.5),h.sp.acc>0?'♯':'♭','acc','middle');
-        pStep=h.sp.step;pCol=col;
-      }
-      for(let k=st.bot-2;k>=h.sp.step;k-=2)led[k+':'+h.off]=[Y(k),h.off];
-      for(let k=st.bot+10;k<=h.sp.step;k+=2)led[k+':'+h.off]=[Y(k),h.off];
-    });
-    Object.values(led).forEach(([y,o])=>{g+=L(X+o-7.5,y,X+o+7.5,y,'lg');});
-    hs.forEach(h=>{const cx=X+h.off;g+='<ellipse class="hd open c-'+hand(h.n)+'" cx="'+cx+'" cy="'+h.y+'" rx="4.8" ry="3.2" transform="rotate(-22 '+cx+' '+h.y+')"/>';});
+/* note heads of one chord or one run of melody notes on a staff, with accidentals and ledger lines */
+function tHeads(st,items,X){
+  const Y=step=>st.top+32-(step-st.bot)*4;let g='';
+  const hs=items.map(it=>Object.assign({y:Y(it.sp.step),off:0},it)).sort((a,b)=>a.sp.step-b.sp.step);
+  for(let i=1;i<hs.length;i++)if(hs[i].sp.step-hs[i-1].sp.step<=1&&!hs[i-1].off)hs[i].off=9.6;
+  let pStep=99,pCol=0;const led={};
+  hs.slice().reverse().forEach(h=>{
+    if(h.sp.acc){
+      const col=pStep-h.sp.step<6?(pCol+1)%3:0;
+      g+=TX(X-11-col*7.5,h.y+(h.sp.acc<0?3.5:4.5),h.sp.acc>0?'♯':'♭','acc','middle');
+      pStep=h.sp.step;pCol=col;
+    }
+    for(let k=st.bot-2;k>=h.sp.step;k-=2)led[k+':'+h.off]=[Y(k),h.off];
+    for(let k=st.bot+10;k<=h.sp.step;k+=2)led[k+':'+h.off]=[Y(k),h.off];
   });
-  g+=L(8,38,8,140,'bl')+L(140,38,140,140,'bl');
+  Object.values(led).forEach(([y,o])=>{g+=L(X+o-7.5,y,X+o+7.5,y,'lg');});
+  hs.forEach(h=>{const cx=X+h.off;g+='<ellipse class="hd c-'+h.c+(h.open?' open':'')+'" cx="'+cx+'" cy="'+h.y+'" rx="'+(h.open?4.8:4.4)+'" ry="3.2" transform="rotate(-22 '+cx+' '+h.y+')"/>';});
+  return g;
+}
+/* two hands: left on the bass staff, right on the treble, so the hands read apart; one hand: split at middle C */
+function tChord(v,ch,key,X,tTop,bTop){
+  const ks=keySig(key),two=v.lh.length&&v.rh.length,sts=[{top:tTop,bot:30,it:[]},{top:bTop,bot:18,it:[]}];
+  uniq(v.lh.concat(v.rh)).forEach(n=>sts[(two?(v.lh.includes(n)?n>=65:n>=55):n>=60)?0:1].it.push({sp:spellChord(n,ch,key,ks),c:n===v.T?'mel':v.lh.includes(n)?'lh':'rh',open:true}));
+  return tHeads(sts[0],sts[0].it,X)+tHeads(sts[1],sts[1].it,X);
+}
+function tStaff(v,ch,key){
+  let g='';
+  [38,108].forEach((top,i)=>{for(let l=0;l<5;l++)g+=L(8,top+l*8,140,top+l*8,'sl');g+=clefSvg(i?'f':'g',13,top);});
+  g+=tChord(v,ch,key,92,38,108)+L(8,38,8,140,'bl')+L(140,38,140,140,'bl');
   return '<svg class="tstaff" viewBox="0 0 148 172" role="img" aria-label="The chord in sheet music">'+g+'</svg>';
+}
+/* the whole exercise as one sheet: a bar per step, the forms of one chord kept on one line where they fit.
+   When the exercise follows a song, the melody notes of each bar are written on their own staff above (pitches in order, not their rhythm). */
+const KS0={f:0,acc:{C:0,D:0,E:0,F:0,G:0,A:0,B:0}};
+function tSheet(width){
+  const steps=TM.steps,walk=TM.src==='song'&&TM.drill!=='each'&&R&&R.segs.length,VW=Math.max(300,width)/1.3,head=38;
+  const bars=steps.map((s,i)=>{
+    let mel=[];
+    if(walk&&s.seg!=null){
+      const end=TM.drill==='lead'&&steps[i+1]&&steps[i+1].seg>s.seg?steps[i+1].seg:TM.drill==='lead'?R.segs.length:s.seg+1;
+      for(let k=s.seg;k<end&&mel.length<=16;k++)R.segs[k].notes.forEach(n=>{if(mel.length<=16)mel.push(n.midi+(TM.drill==='top'?(R.segs[k].shift||0):0));});
+    }
+    return {s,i,mel,w:Math.max(64,walk?26+Math.min(mel.length,16)*13:0)};
+  });
+  const rows=[];let row=[],x=head;
+  bars.forEach((b,i)=>{
+    let need=b.w;
+    if(b.s.first&&!walk){need=0;for(let k=i;k<bars.length&&(k===i||!bars[k].s.first);k++)need+=bars[k].w;if(need>VW-head-4)need=b.w;}
+    if(row.length&&x+need>VW-4){rows.push(row);row=[];x=head;}
+    row.push(b);x+=b.w;
+  });
+  if(row.length)rows.push(row);
+  const mTop=30,tTop=walk?112:52,bTop=tTop+68,H=bTop+32+36,showN=!tHid('name'),showS=!tHid('staff');
+  return rows.map(r=>{
+    const xEnd=head+r.reduce((a,b)=>a+b.w,0);let g='',x=head;
+    (walk?[[mTop,'g'],[tTop,'g'],[bTop,'f']]:[[tTop,'g'],[bTop,'f']]).forEach(([top,cl])=>{for(let l=0;l<5;l++)g+=L(6,top+l*8,xEnd,top+l*8,'sl');g+=clefSvg(cl,10,top);});
+    g+=L(6,walk?mTop:tTop,6,bTop+32,'bl');
+    r.forEach(b=>{
+      const s=b.s,cx=x+(walk?b.w/2:b.w/2+4);
+      g+='<rect class="tsel'+(b.i===TM.i?' on':'')+'" data-step="'+b.i+'" x="'+x+'" y="2" width="'+b.w+'" height="'+(H-4)+'" rx="4"><title>'+esc(s.sym+', '+s.label)+'</title></rect>';
+      if(showN){
+        if(s.first||b===r[0])g+=TX(x+5,12,s.sym,'csym');
+        g+=TX(x+5,walk?23:25,(s.short||'')+(TM.got[s.id]?' ✓':''),'tsl');
+      }
+      if(walk&&s.bar&&b.mel.length)g+=TX(x+b.w-4,12,'bar '+s.bar,'tsn','end');
+      if(showS){
+        if(walk)b.mel.slice(0,16).forEach((m,k)=>{g+=tHeads({top:mTop,bot:30},[{sp:spell(m,KS0,s.key.flats),c:'mel',open:false}],x+18+k*13);});
+        g+=tChord(s.v,s.ch,s.key,cx,tTop,bTop);
+      }
+      x+=b.w;
+      g+=L(x,walk?mTop:tTop,x,bTop+32,'bl');
+    });
+    return '<svg viewBox="0 0 '+VW+' '+H+'" role="img" aria-label="Sheet of the exercise">'+g+'</svg>';
+  }).join('');
+}
+function teachMelStatus(){
+  const M=lastMel,n=M?M.count:0,key=M&&M.key;
+  const names=n?[].concat(...M.segs.map(sg=>sg.notes.map(m=>noteName(m.midi,key)))):[];
+  $('tKeySel').value=S.keySel;
+  $('tRec').textContent=TM.rec?'Done: build the chords':'Record a new melody';$('tRec').classList.toggle('rec',!!TM.rec);
+  $('tUndo').hidden=!TM.rec;$('tMelPlay').disabled=!n||!!TM.rec;
+  $('tMelStatus').textContent=TM.rec?(n?n+' note'+(n>1?'s':'')+' so far: '+(names.length>14?'… ':'')+names.slice(-14).join(' ')+'. Tap Done when you have the tune in.':'Recording. Play your melody on these keys, a computer keyboard (A to L) or your MIDI piano.')
+    :n?(S.demo?S.demo+': ':'Your melody: ')+n+' notes in '+key.label+(S.keySel==='auto'?' (detected; change it with Key if that is wrong)':'')+'. The exercises below are built on its chords. Record a new one any time, or play these keys just to try things out.'
+    :'No melody yet. Tap Record a new melody and play one in; the app works out a chord progression for it.';
+}
+/* record a melody without leaving teaching mode; when it is done the app harmonises it and the exercise follows its chords */
+function teachRec(){
+  stopAll();teachStop();
+  if(!TM.rec){
+    TM.rec=true;S.notes=[];S.held.clear();dropDemo();S.pins={};S.capture=true;cleanState=null;
+    melodyChanged();teachMelStatus();return;
+  }
+  TM.rec=false;
+  if(S.notes.length){TM.src='song';TM.topic='inv';if(TM.drill==='each')TM.drill='lead';TM.i=0;TM.plan=null;teachSave();}
+  update();teachMelStatus();
 }
 function teachRender(){
   const st=tCur(),n=TM.steps.length;
-  $('tStepPanel').hidden=!n;$('tEmpty').hidden=!!n;
-  if(!n){$('tEmpty').textContent='There is no melody to build exercises from yet. Pick an example or one of the twelve-key sets under Chords from, load a MIDI file, or go back and play or sing a melody.';return;}
+  $('tStepPanel').hidden=!n;$('tEmpty').hidden=!!n;teachMelStatus();
+  if(!n){$('tEmpty').textContent='There is no melody to build exercises from yet. Record one above, pick an example or one of the twelve-key sets under Chords from, or load a MIDI file.';return;}
   const done_=TM.steps.filter(s=>TM.got[s.id]).length;
   $('tJump').innerHTML=TM.steps.map((s,i)=>'<option value="'+i+'">'+(i+1)+' · '+esc(s.sym)+' · '+esc(s.label)+(TM.got[s.id]?' ✓':'')+'</option>').join('');$('tJump').value=TM.i;
   $('tPrev').disabled=TM.i<=0;$('tNext').disabled=TM.i>=n-1;
@@ -2508,7 +2606,11 @@ function teachRender(){
   else if(!tHid('notes'))h+='<p class="thow">'+esc(st.how)+'</p>';
   h+='<div class="tkbwrap">'+tKbSvg(v,TM.lo,TM.hi,!tHid('kb'),!tHid('fing'))+'</div>';
   if(tHid('kb')&&!allHid)h+='<p class="small">Key placements are hidden. Find the chord yourself, then tap Peek to check.</p>';
-  if(!tHid('staff')||!tHid('notes'))h+='<div class="tfoot">'+(tHid('staff')?'':tStaff(v,st.ch,st.key))+
+  const sheet=TM.view!=='step';
+  ['tViewSheet','tViewStep'].forEach(id=>$(id).setAttribute('aria-pressed',(id==='tViewSheet')===sheet));
+  $('tSheet').hidden=!sheet;
+  if(sheet){$('tSheet').innerHTML=tSheet($('tSheet').clientWidth-22);if(TM.run){const on=$('tSheet').querySelector('.tsel.on');if(on)on.closest('svg').scrollIntoView({block:'nearest'});}}
+  if((!sheet&&!tHid('staff'))||!tHid('notes'))h+='<div class="tfoot">'+(sheet||tHid('staff')?'':tStaff(v,st.ch,st.key))+
     (tHid('notes')?'':'<div class="notes">'+(v.lh.length?'<div><span class="tag lh">LH</span>'+names(v.lh)+'</div>':'')+(rh.length?'<div><span class="tag rh">RH</span>'+names(rh)+'</div>':'')+(v.T>=0?'<div><span class="tag mel">Top</span>'+vName(v.T,st.ch,st.key)+'</div>':'')+'</div>')+'</div>';
   $('tCard').innerHTML=h;
   /* on a narrow screen the keyboard scrolls sideways; start it centred on the chord */
@@ -2559,6 +2661,7 @@ function teachRun(){
 }
 function teachOpen(on){
   stopAll();teachStop();
+  if(TM.rec){TM.rec=false;update();}
   if(on&&stale)update();
   TM.open=on;tHeld.clear();
   $('teachView').hidden=!on;$('playView').hidden=true;document.querySelector('main').hidden=on;window.scrollTo(0,0);
@@ -2613,6 +2716,16 @@ function teachInit(){
     else if(v.startsWith('saved:')){TM.src='song';TM.i=0;teachSave();openSaved('s:'+v.slice(6));}
     else set('src',v);
   };
+  $('tKeySel').innerHTML=$('keySel').innerHTML;
+  $('tKeySel').onchange=e=>{S.keySel=e.target.value;$('keySel').value=S.keySel;S.demoKey=false;S.pins={};stopAll();update();};
+  $('tRec').onclick=teachRec;
+  $('tUndo').onclick=()=>{if(TM.rec){S.notes.pop();melodyChanged();}};
+  $('tMelPlay').onclick=playMelody;
+  $('tOctDown').onclick=()=>{if(S.base>24){S.base-=12;buildKb();}};
+  $('tOctUp').onclick=()=>{if(S.base<84){S.base+=12;buildKb();}};
+  $('tViewSheet').onclick=()=>{TM.view='sheet';teachSave();teachRender();};
+  $('tViewStep').onclick=()=>{TM.view='step';teachSave();teachRender();};
+  $('tSheet').onclick=e=>{const b=e.target.closest('[data-step]');if(b){teachGo(+b.dataset.step);teachHear(false);}};
   $('tPrev').onclick=()=>teachGo(TM.i-1);
   $('tNext').onclick=()=>teachGo(TM.i+1);
   $('tJump').onchange=e=>teachGo(+e.target.value);
@@ -2654,9 +2767,7 @@ function init(){
   ks.innerHTML='<option value="auto">Detect automatically</option>'+['major','minor'].map(m=>'<optgroup label="'+(m==='major'?'Major':'Minor')+'">'+Array.from({length:12},(_,t)=>'<option value="'+t+':'+m+'">'+makeKey(t,m).label+'</option>').join('')+'</optgroup>').join('');
   buildKb();renderControls();
   $('midiBtn').onclick=connectMidi;
-  const kb=$('kb');
-  kb.addEventListener('pointerdown',kbDown);
-  ['pointerup','pointercancel','pointerleave'].forEach(ev=>kb.addEventListener(ev,kbUp));
+  ['kb','tKb'].forEach(id=>{const kb=$(id);kb.addEventListener('pointerdown',kbDown);['pointerup','pointercancel','pointerleave'].forEach(ev=>kb.addEventListener(ev,kbUp));});
   window.addEventListener('pointerup',kbUp);
   $('octDown').onclick=()=>{if(S.base>24){S.base-=12;buildKb();}};
   $('octUp').onclick=()=>{if(S.base<84){S.base+=12;buildKb();}};
@@ -2731,7 +2842,7 @@ function init(){
   $('qscaleSel').onchange=e=>{S.qscale=+e.target.value;changed();};
   $('layoutSel').onchange=e=>{S.layout=e.target.value;stopAll();save();if(lastScore)renderScore(lastScore[0],lastScore[1]);renderPlayView();};
   $('scoreVoicingChips').onclick=e=>{const b=e.target.closest('[data-sv]');if(b){S.scoreVoicing=+b.dataset.sv;stopAll();if(lastScore)renderScore(lastScore[0],lastScore[1]);}};
-  let rz=null;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(lastScore)renderScore(lastScore[0],lastScore[1]);renderPlayView();},150);});
+  let rz=null;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(TM.open)teachRender();if(lastScore)renderScore(lastScore[0],lastScore[1]);renderPlayView();},150);});
   $('refreshBtn').onclick=()=>{stopAll();update();};
   $('results').onclick=e=>{
     const p=e.target.closest('[data-play]');
