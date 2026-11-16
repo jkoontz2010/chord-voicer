@@ -99,6 +99,12 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
 .c-ink{--c:var(--ink)} .c-lh{--c:var(--lh)} .c-rh{--c:var(--rh)} .c-mel{--c:var(--mel)}
 .hd{fill:var(--c)}
 .hd.open{fill:var(--surface);stroke:var(--c);stroke-width:1.6}
+.parts{display:flex;flex-direction:column;gap:10px}
+.part{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.part.mel{border-color:var(--mel);box-shadow:0 0 0 1px var(--mel)}
+.part.off canvas,.part.off .pname{opacity:.4}
+.part canvas{width:100%;height:32px;display:block;background:var(--bg);border-radius:6px}
+.part .pname{font-weight:600}
 .voice{border-top:1px solid var(--line);padding-top:14px}
 .filebtn{display:inline-flex;align-items:center;cursor:pointer}
 .vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
@@ -213,10 +219,18 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
       <label class="btn filebtn" for="songFile">Load a song (MIDI file)</label>
       <input type="file" id="songFile" class="vh" accept=".mid,.midi,.kar,.rmi,audio/midi,audio/x-midi,audio/mid">
       <label class="field" id="savedWrap" hidden>Your songs <select id="savedSel"></select></label>
-      <label class="field" id="partWrap" hidden>Melody part <select id="partSel"></select></label>
       <label class="field" id="srcWrap" hidden>Chords <select id="srcSel"><option value="song">From the song</option><option value="new">New, from the melody</option></select></label>
       <p class="status" id="songStatus" style="flex:1;min-width:220px">Pick a .mid file of a song. The app finds the melody, writes it out, and voices the chords the song plays so you can play along.</p>
     </div>
+  </section>
+
+  <section class="panel" id="partsPanel" aria-label="Song parts" hidden>
+    <div class="row spread">
+      <h2>Song parts</h2>
+      <button class="btn primary" id="songPlayBtn" type="button">Play song</button>
+    </div>
+    <p class="small">Tap Listen to hear one part on its own, from where it comes in. The part that carries the tune is the one to use as the melody. Parts switched off are left out of Play song; the chords are still read from every part.</p>
+    <div class="parts" id="partsList"></div>
   </section>
 
   <section class="panel" aria-label="Melody">
@@ -1424,22 +1438,108 @@ async function readRecording(file){
 function songStatus(t,warn){const el=$('songStatus');el.textContent=t;el.classList.toggle('warn',!!warn);}
 function songUi(){
   const on=!!S.song;
-  ['partWrap','srcWrap','srcWrap2'].forEach(id=>{$(id).hidden=!on;});
+  ['partsPanel','srcWrap','srcWrap2'].forEach(id=>{$(id).hidden=!on;});
   $('qscaleSel').disabled=on;
   ['srcSel','srcSel2'].forEach(id=>{$(id).value=S.chordSrc==='new'?'new':'song';});
   if(!on){songStatus('Pick a .mid file of a song. The app finds the melody, writes it out, and voices the chords the song plays so you can play along.');return;}
-  $('partSel').innerHTML=S.song.data.parts.map((pt,i)=>pt.drum||!pt.notes.length?'':'<option value="'+i+'">'+esc(pt.name)+' · '+pt.notes.length+' notes</option>').join('');
-  $('partSel').value=S.song.part;
+  renderParts();
+}
+/* one row per instrument in the song: a picture of its notes, a solo button, a mix switch, and the melody choice */
+function renderParts(){
+  const sg=S.song;if(!sg)return;
+  const d=sg.data,order=d.parts.map((pt,i)=>i).filter(i=>d.parts[i].notes.length).sort((a,b)=>d.parts[b].score-d.parts[a].score);
+  $('songPlayBtn').textContent=songPlay&&songPlay.solo==null?'Stop song':'Play song';
+  $('partsList').innerHTML=order.map(i=>{
+    const pt=d.parts[i],mel=i===sg.part,off=!!sg.muted[i],solo=songPlay&&songPlay.solo===i;
+    return '<div class="part'+(mel?' mel':'')+(off?' off':'')+'">'+
+      '<div class="row spread"><span class="pname">'+esc(pt.drum&&!/drum|kit|perc/i.test(pt.name)?'Drums ('+pt.name+')':pt.name)+'</span>'+(mel?'<span class="tag mel">Melody</span>':i===sg.guess?'<span class="small">likely melody</span>':'')+
+      '<span class="small">'+pt.notes.length+' notes · '+(pt.drum?'drums':pt.mono>.85?'one note at a time':'chords')+'</span></div>'+
+      '<canvas data-roll="'+i+'" aria-hidden="true"></canvas>'+
+      '<div class="row"><button class="btn" type="button" data-listen="'+i+'" aria-pressed="'+!!solo+'">'+(solo?'Stop':'Listen')+'</button>'+
+      '<button class="btn" type="button" data-mute="'+i+'" aria-pressed="'+!off+'">'+(off?'Off':'On')+'</button>'+
+      (pt.drum||mel?'':'<button class="btn" type="button" data-usemel="'+i+'">Use as melody</button>')+'</div></div>';
+  }).join('');
+  requestAnimationFrame(drawRolls);
+}
+function drawRolls(){
+  const sg=S.song;if(!sg)return;
+  const cs=getComputedStyle(document.documentElement),ink=cs.getPropertyValue('--ink').trim()||'#222',melc=cs.getPropertyValue('--mel').trim()||'#d40';
+  document.querySelectorAll('#partsList canvas').forEach(cv=>{
+    const i=+cv.dataset.roll,pt=sg.data.parts[i],dpr=Math.min(2,window.devicePixelRatio||1),w=Math.max(50,Math.round(cv.clientWidth*dpr)),h=Math.round(32*dpr);
+    cv.width=w;cv.height=h;
+    const g=cv.getContext('2d');if(!g)return;
+    let lo=127,hi=0;pt.notes.forEach(n=>{if(n.midi<lo)lo=n.midi;if(n.midi>hi)hi=n.midi;});
+    const span=Math.max(6,hi-lo),end=sg.data.end||1;
+    g.fillStyle=i===sg.part?melc:ink;
+    pt.notes.forEach(n=>{g.fillRect(n.on/end*w,(h-3*dpr)*(1-(n.midi-lo)/span),Math.max(dpr,(n.off-n.on)/end*w),2*dpr);});
+  });
+}
+/* song playback: notes are handed to the sound engine a moment before they are due, so parts can be switched while it plays */
+let songPlay=null;
+const HELD=['Organ','Strings','Ensemble','Brass','Reed','Flute','Synth lead','Synth pad'];
+function songVoice(a,pt,m,t,dur,out){
+  if(pt.drum){
+    if(m===35||m===36){
+      const o=a.createOscillator(),g=a.createGain();o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(45,t+.12);
+      g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.2);o.connect(g);g.connect(out);o.start(t);o.stop(t+.22);return;
+    }
+    const nz=a.createBufferSource(),g=a.createGain(),f=a.createBiquadFilter(),sn=m===38||m===40||m===39;
+    nz.buffer=fx.noise;f.type=sn?'bandpass':'highpass';f.frequency.value=sn?1800:7000;
+    g.gain.setValueAtTime(sn?.3:.1,t);g.gain.exponentialRampToValueAtTime(.001,t+(sn?.14:.05));
+    nz.connect(f);f.connect(g);g.connect(out);nz.start(t);nz.stop(t+.16);return;
+  }
+  const o=a.createOscillator(),g=a.createGain(),held=HELD.includes(pt.fam),bass=pt.fam==='Bass';
+  o.type=held&&pt.fam!=='Flute'?'sawtooth':'triangle';o.frequency.value=440*Math.pow(2,(m-69)/12);
+  const pk=bass?.3:held?(pt.fam==='Flute'?.22:.07):.13;
+  g.gain.setValueAtTime(.0001,t);
+  if(held){dur=Math.max(.08,dur);g.gain.linearRampToValueAtTime(pk,t+.03);g.gain.setValueAtTime(pk,t+dur);g.gain.linearRampToValueAtTime(.0001,t+dur+.08);}
+  else{dur=Math.max(.12,Math.min(dur,2.5));g.gain.linearRampToValueAtTime(pk,t+.005);g.gain.exponentialRampToValueAtTime(pk*.2,t+dur);g.gain.linearRampToValueAtTime(.0001,t+dur+.06);}
+  o.connect(g);g.connect(out);o.start(t);o.stop(t+dur+.1);
+}
+function playSong(solo){
+  const was=songPlay;stopAll();
+  if(was&&was.solo==solo)return;
+  const a=audio(),sg=S.song;if(!a||!sg)return;
+  const d=sg.data,spt=sg.q/1000/d.ppq,evs=[];
+  d.parts.forEach((pt,i)=>{if(solo==null||i===solo)pt.notes.forEach(n=>evs.push({i,m:n.midi,t:n.on*spt,d:(n.off-n.on)*spt}));});
+  if(!evs.length)return;
+  evs.sort((x,y)=>x.t-y.t);
+  const begin=solo==null?0:Math.max(0,evs[0].t-.25);
+  songPlay={solo,evs,idx:0,t0:0,timer:0,end:d.end*spt};
+  const go=()=>{
+    if(!songPlay||songPlay.evs!==evs)return;
+    const bus=a.createGain(),lp=a.createBiquadFilter();bus.gain.value=.7;lp.type='lowpass';lp.frequency.value=3200;
+    lp.connect(bus);bus.connect(master(a));scoreBus=bus;
+    const sp=songPlay;sp.t0=a.currentTime+.12-begin;
+    const pump=()=>{
+      if(songPlay!==sp)return;
+      while(sp.idx<evs.length&&sp.t0+evs[sp.idx].t<a.currentTime+.4){
+        const e=evs[sp.idx++],pt=d.parts[e.i];
+        if(solo==null&&sg.muted[e.i])continue;
+        const t=sp.t0+e.t;if(t<a.currentTime-.05)continue;
+        songVoice(a,pt,e.m,Math.max(t,a.currentTime),e.d,pt.drum?bus:lp);
+      }
+      if(sp.idx>=evs.length&&a.currentTime>sp.t0+sp.end+.6)stopAll();
+    };
+    pump();sp.timer=setInterval(pump,90);
+    /* the whole song: the score follows along from the bar where the melody starts */
+    if(solo==null&&S.input==='score'&&R&&R.score&&R.score.known){
+      const spu=sg.q/4000;autoScroll=true;
+      anim={t0:sp.t0+sg.off*spu,spu,total:R.score.total,chords:R.score.chords,sys:-1,chord:-1,now:-1,raf:0};tick();
+    }
+  };
+  if(a.state==='running')go();else a.resume().then(go).catch(()=>{});
+  renderParts();
 }
 function useSongPart(i,first){
   const sg=S.song,r=songInput(sg.data,i);
-  Object.assign(sg,{part:i,q:r.q,beats:r.beats,off:r.off,harm:r.harm});
+  Object.assign(sg,{part:i,q:r.q,beats:r.beats,off:r.off,harm:r.harm});if(first){sg.guess=i;sg.muted={};}
   S.notes=r.notes;S.held.clear();S.pins={};S.demo=sg.name;cleanState=null;
   if(first){S.grid=r.grid;S.keySel=r.key.tonic+':'+r.key.mode;S.demoKey=true;S.input='score';S.scoreVoicing=0;}
   stopAll();save();renderControls();songUi();update();
   const pt=sg.data.parts[i];
   songStatus('Loaded '+sg.name+'. Melody: '+pt.name+', '+r.count+' notes, '+Math.round(60000/r.q)+' BPM, '+r.key.label+'. '+
-    (r.alone?'This file has a single part, so the top line is the melody and the chords are read from all of its notes.':'If the melody looks wrong, pick another part under Melody part.'));
+    (r.alone?'This file has a single part, so the top line is the melody and the chords are read from all of its notes.':'If that is not the tune, open Song parts below, listen, and choose another.'));
 }
 /* loaded songs are kept in this browser's own storage so they can be picked again; they are never sent anywhere */
 const SONGKEY='chordVoicer.songs';
@@ -1852,7 +1952,7 @@ function follow(el,block){
   progUntil=performance.now()+400;
   el.scrollIntoView({block:block||'start',behavior:'auto'});   /* jump, no glide */
 }
-function userTouched(){if(playing)autoScroll=false;}
+function userTouched(){if(playing||songPlay)autoScroll=false;}
 ['wheel','touchstart','pointerdown','keydown'].forEach(ev=>window.addEventListener(ev,userTouched,{capture:true,passive:true}));
 /* Scroll events are not used to detect the person: phones fire them late and for our own scrolling too.
    Touch, pointer, wheel and key events above cover every way of taking over. */
@@ -1924,7 +2024,7 @@ function playMelody(){
   };
   if(a.state==='running')go();else a.resume().then(go).catch(()=>{});
 }
-function stopAll(){melTimers.forEach(clearTimeout);melTimers=[];$('melPlay').textContent='Play melody';document.querySelectorAll('.strip .n.on').forEach(c=>c.classList.remove('on'));if(anim){cancelAnimationFrame(anim.raf);anim=null;}clearCursor();if(scoreBus){try{scoreBus.gain.value=0;scoreBus.disconnect();}catch(e){}scoreBus=null;}if(playing){clearTimeout(playing);playing=null;}document.querySelectorAll('.card.now').forEach(c=>c.classList.remove('now'));playLabels(false);}
+function stopAll(){if(songPlay){clearInterval(songPlay.timer);songPlay=null;if(S.song)renderParts();}melTimers.forEach(clearTimeout);melTimers=[];$('melPlay').textContent='Play melody';document.querySelectorAll('.strip .n.on').forEach(c=>c.classList.remove('on'));if(anim){cancelAnimationFrame(anim.raf);anim=null;}clearCursor();if(scoreBus){try{scoreBus.gain.value=0;scoreBus.disconnect();}catch(e){}scoreBus=null;}if(playing){clearTimeout(playing);playing=null;}document.querySelectorAll('.card.now').forEach(c=>c.classList.remove('now'));playLabels(false);}
 function playAll(){
   if(playing){stopAll();return;}
   stopAll();
@@ -2065,7 +2165,14 @@ function init(){
   $('voiceFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readRecording(f);};
   $('songFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readSong(f);};
   $('savedSel').onchange=e=>{const v=e.target.value;e.target.value='';if(v)openSaved(v);};savedUi();
-  $('partSel').onchange=e=>{if(S.song)useSongPart(+e.target.value,false);};
+  $('songPlayBtn').onclick=()=>playSong(null);
+  $('partsList').onclick=e=>{
+    if(!S.song)return;
+    const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.listen!=null)playSong(+b.dataset.listen);
+    else if(b.dataset.mute!=null){const i=+b.dataset.mute;S.song.muted[i]=!S.song.muted[i];renderParts();}
+    else if(b.dataset.usemel!=null)useSongPart(+b.dataset.usemel,false);
+  };
   ['srcSel','srcSel2'].forEach(id=>{$(id).onchange=e=>{S.chordSrc=e.target.value;S.scoreVoicing=0;stopAll();changed();songUi();};});
   $('playAll').onclick=playAll;
   const showPV=on=>{$('playView').hidden=!on;document.querySelector('main').hidden=on;window.scrollTo(0,0);if(on)renderPlayView();else if(lastScore)renderScore(lastScore[0],lastScore[1]);};
