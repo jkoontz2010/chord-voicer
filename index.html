@@ -169,7 +169,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
   <header class="row spread">
     <div>
       <h1>Chord Voicer</h1>
-      <p class="sub">Play a melody. Get chords for it, voiced with your melody note on top.</p>
+      <p class="sub">Play a melody or load a song. Get chords for it, voiced with the melody note on top.</p>
     </div>
     <div class="row">
       <div class="seg" role="group" aria-label="Mode">
@@ -209,6 +209,13 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
       <input type="file" id="voiceFile" class="vh" accept="audio/*,video/*">
       <p class="status" id="voiceStatus" style="flex:1;min-width:220px">Sing or hum one syllable per note, like da da da. A new take replaces the melody.</p>
     </div>
+    <div class="row voice">
+      <label class="btn filebtn" for="songFile">Load a song (MIDI file)</label>
+      <input type="file" id="songFile" class="vh" accept=".mid,.midi,.kar,.rmi,audio/midi,audio/x-midi,audio/mid">
+      <label class="field" id="partWrap" hidden>Melody part <select id="partSel"></select></label>
+      <label class="field" id="srcWrap" hidden>Chords <select id="srcSel"><option value="song">From the song</option><option value="new">New, from the melody</option></select></label>
+      <p class="status" id="songStatus" style="flex:1;min-width:220px">Pick a .mid file of a song. The app finds the melody, writes it out, and voices the chords the song plays so you can play along.</p>
+    </div>
   </section>
 
   <section class="panel" aria-label="Melody">
@@ -238,6 +245,9 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
       </label>
       <label class="field">Layout
         <select id="layoutSel"><option value="h">One line, scrolls sideways</option><option value="rows">Rows</option></select>
+      </label>
+      <label class="field" id="srcWrap2" hidden>Chords
+        <select id="srcSel2"><option value="song">From the song</option><option value="new">New, from the melody</option></select>
       </label>
       <label class="field">New chord
         <select id="everySel"><option value="bar">Every bar</option><option value="half">Twice a bar</option><option value="beat">Every beat</option></select>
@@ -466,7 +476,7 @@ function trans(a,b,perNote){
   else if(a.fam==='dom'&&mod(b.root-a.root,12)===5)s+=.3;
   return s;
 }
-function harmonize(segs,key,vocab,pins,perNote){
+function harmonize(segs,key,vocab,pins,perNote,fixed){
   const all=candidates(key,vocab), n=segs.length;
   if(!n)return [];
   const em=(i,c)=>{
@@ -476,7 +486,7 @@ function harmonize(segs,key,vocab,pins,perNote){
     if(i===n-1){if(tonic)s+=1.6;if(c.target!=null)s-=1.5;}
     return s;
   };
-  const sets=segs.map((_,i)=>{const p=pins&&pins[i]&&all.find(c=>c.id===pins[i]);return p?[p]:all;});
+  const sets=segs.map((_,i)=>{const p=pins&&pins[i]&&all.find(c=>c.id===pins[i]);return p?[p]:(fixed&&fixed[i])?[fixed[i]]:all;});
   let prev=sets[0].map(c=>({c,s:em(0,c),back:null}));
   const layers=[prev];
   for(let i=1;i<n;i++){
@@ -703,9 +713,19 @@ function detectMeter(mel){
 }
 function quantize(ns,o){
   const gs=o.grid||2;
-  const q=estimateBeat(ns,gs)*(o.scale||1),g=q/4*gs;   /* q: length of a quarter note as it was played, in ms */
+  const q=o.q||estimateBeat(ns,gs)*(o.scale||1),g=q/4*gs;   /* q: length of a quarter note as it was played, in ms */
   let pos=0;const mel=[];
-  ns.forEach((n,i)=>{
+  if(o.q){
+    /* a song file: tempo and bar lines are known, so every note keeps its own place on the grid */
+    let last=-1;
+    ns.forEach(n=>{const st=Math.max(0,Math.round(n.on/g)*gs);if(st<=last)return;mel.push({midi:n.midi,start:st,a:n.on,b:n.off==null?n.on+q:n.off});last=st;});
+    mel.forEach((m,i)=>{
+      const nx=mel[i+1],held=Math.max(gs,Math.round((m.b-m.a)/g)*gs);
+      m.dur=nx?((nx.a-m.b>=0.9*q&&held<nx.start-m.start)?held:nx.start-m.start):held;
+      pos=m.start+m.dur;
+    });
+    mel.forEach(m=>{delete m.a;delete m.b;});
+  }else ns.forEach((n,i)=>{
     const nx=ns[i+1],off=n.off==null?(nx?nx.on:n.on+q):n.off;
     const held=Math.max(gs,Math.round((off-n.on)/g)*gs);
     if(nx){
@@ -728,7 +748,7 @@ function quantize(ns,o){
     segs[segs.length-1].push(n);
   });
   if(segStarts.length)segStarts[0]=0;
-  return {q,bpm:Math.round(60000/q),meterAuto:!o.beats,M,beats,grid:gs,mel,segs,segStarts,total,oct};
+  return {q,bpm:Math.round(60000/q),meterAuto:!o.beats,known:!!o.q,M,beats,grid:gs,mel,segs,segStarts,total,oct,W};
 }
 const FIFTHS={0:0,7:1,2:2,9:3,4:4,11:5,6:6,5:-1,10:-2,3:-3,8:-4,1:-5};
 function keySig(key){
@@ -832,11 +852,13 @@ function analyze(raw,o){
   let ns=prep(raw,o.now||0),sc=null;
   if(o.score&&ns.length){sc=quantize(ns,o.score);ns=sc.mel;}
   const key=o.keySel==='auto'?detectKey(ns):makeKey(+o.keySel.split(':')[0],o.keySel.split(':')[1]);
+  let fixed=null;
+  if(sc&&o.song){const r=songSegments(sc,o.song,key,o.vocab);sc.segs=r.segs;sc.segStarts=r.starts;fixed=r.fixed;}
   const segs=sc?sc.segs:segment(ns,o.seg);
-  const h=harmonize(segs,key,o.vocab,o.pins,!sc&&o.seg==='n1');
+  const h=harmonize(segs,key,o.vocab,o.pins,!sc&&o.seg==='n1',fixed);
   const prevBy={};
   const out=segs.map((seg,i)=>{
-    const ch=h[i].chord, T0=pickTarget(seg,ch);
+    const ch=h[i].chord, T0=seg.length?pickTarget(seg,ch):carryTarget(seg.carry.midi,ch);
     let T=T0;while(T<(sc?60:64))T+=12;while(T>88)T-=12;
     const voicings=o.strategies.map(id=>{
       const v=STRATEGIES[id].fn(ch,T,{sevenths:o.vocab.sevenths,prev:prevBy[id],pc:pc=>spellRoot(pc,key)});
@@ -844,7 +866,7 @@ function analyze(raw,o){
       v.id=id;v.name=STRATEGIES[id].name;v.adds=describeAdds(v,ch,o.vocab.sevenths);
       return v;
     });
-    return {notes:seg,target:T0,shift:T-T0,chord:ch,symbol:symbol(ch,key,o.vocab.sevenths),roman:roman(ch,key,o.vocab.sevenths),
+    return {notes:seg,own:!seg.length&&!(seg.sounding&&seg.carry.midi===T0),fromSong:!!(fixed&&fixed[i]&&fixed[i].id===ch.id),target:T0,shift:T-T0,chord:ch,symbol:symbol(ch,key,o.vocab.sevenths),roman:roman(ch,key,o.vocab.sevenths),
       alts:h[i].alts.map(c=>({id:c.id,symbol:symbol(c,key,o.vocab.sevenths)})),pinned:h[i].pinned,voicings};
   });
   if(sc)sc.chords=out.map((sg,i)=>({seg:i,start:sc.segStarts[i],dur:(i+1<out.length?sc.segStarts[i+1]:sc.total)-sc.segStarts[i]}));
@@ -912,7 +934,182 @@ function notesFromFrames(fr){
   close();
   return notes;
 }
-if(typeof module!=='undefined')module.exports={analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
+/* ---------- song files: read a MIDI file, find the melody part, read the chords the other parts play ---------- */
+const GM_FAM=['Piano','Mallets','Organ','Guitar','Bass','Strings','Ensemble','Brass','Reed','Flute','Synth lead','Synth pad','Synth FX','World','Percussion','Effects'];
+function parseMidi(buf){
+  const d=buf instanceof Uint8Array?buf:new Uint8Array(buf);
+  const str=(p,n)=>{let s='';for(let i=p;i<p+n&&i<d.length;i++)s+=String.fromCharCode(d[i]);return s;};
+  const u32=p=>((d[p]<<24)|(d[p+1]<<16)|(d[p+2]<<8)|d[p+3])>>>0,u16=p=>(d[p]<<8)|d[p+1];
+  let p=0;
+  if(str(0,4)==='RIFF')for(p=8;p<Math.min(d.length-4,512)&&str(p,4)!=='MThd';p++);
+  if(str(p,4)!=='MThd')throw new Error('notmidi');
+  const ntr=u16(p+10),div=u16(p+12);
+  if(div&0x8000||!div)throw new Error('smpte');
+  p+=8+u32(p+4);
+  const song={ppq:div,tempo:0,sig:null,parts:[],end:0};
+  for(let t=0;p+8<=d.length&&t<ntr+8;t++){
+    if(str(p,4)!=='MTrk'){p+=8+u32(p+4);continue;}
+    const end=Math.min(d.length,p+8+u32(p+4));p+=8;
+    let tick=0,st=0,name='';const open={},prog={},byCh={};
+    const vl=()=>{let v=0,b;do{b=d[p++];v=v*128+(b&127);}while((b&128)&&p<end);return v;};
+    const put=n=>{(byCh[n.ch]=byCh[n.ch]||[]).push(n);};
+    while(p<end){
+      tick+=vl();
+      const b=d[p];
+      if(b===0xff){
+        const type=d[p+1];p+=2;const len=vl();
+        if(type===3&&!name)name=str(p,Math.min(len,40)).replace(/[^\x20-\x7e]/g,'').trim();
+        else if(type===0x51&&len>=3&&!song.tempo)song.tempo=(d[p]<<16)|(d[p+1]<<8)|d[p+2];
+        else if(type===0x58&&len>=2&&!song.sig)song.sig=[d[p],1<<d[p+1]];
+        p+=len;continue;
+      }
+      if(b===0xf0||b===0xf7){p++;p+=vl();continue;}
+      if(b&0x80){st=b;p++;}
+      const cmd=st&0xf0,ch=st&15;
+      if(!cmd){p++;continue;}
+      const a=d[p++],v=(cmd===0xc0||cmd===0xd0)?0:d[p++];
+      if(cmd===0xc0){if(prog[ch]==null)prog[ch]=a;}
+      else if(cmd===0x90&&v>0){const k=ch+':'+a;(open[k]=open[k]||[]).push({midi:a,on:tick,off:null,ch});}
+      else if(cmd===0x80||cmd===0x90){const q=open[ch+':'+a],n=q&&q.shift();if(n&&tick>n.on){n.off=tick;put(n);}}
+    }
+    Object.keys(open).forEach(k=>open[k].forEach(n=>{n.off=n.on+div;put(n);}));
+    p=end;
+    const chs=Object.keys(byCh).map(Number).sort((x,y)=>x-y);
+    chs.forEach(ch=>{
+      const notes=byCh[ch].sort((x,y)=>x.on-y.on||y.midi-x.midi).map(n=>({midi:n.midi,on:n.on,off:n.off}));
+      const drum=ch===9,fam=drum?'Drums':GM_FAM[(prog[ch]||0)>>3];
+      song.parts.push({name:name?(chs.length>1?name+' ('+fam+')':name):fam,fam,drum,prog:prog[ch]||0,notes});
+      notes.forEach(n=>{if(n.off>song.end)song.end=n.off;});
+    });
+  }
+  if(!song.tempo)song.tempo=500000;
+  if(!song.sig)song.sig=[4,4];
+  if(!song.parts.some(pt=>!pt.drum&&pt.notes.length))throw new Error('empty');
+  return song;
+}
+function songMeter(song){
+  const b16=song.sig[0]*16/song.sig[1];
+  return [8,12,16].includes(b16)?b16/4:4;
+}
+/* how much each part looks like the tune: one note at a time, singable range, present through the song, moves by step */
+function rateParts(song){
+  const barT=songMeter(song)*song.ppq,bars=Math.max(1,Math.ceil(song.end/barT)),tol=song.ppq/8;
+  song.parts.forEach(pt=>{
+    const ns=pt.notes,n=ns.length;
+    if(pt.drum||!n){pt.score=-99;pt.mono=0;return;}
+    let poly=0,maxOff=-1,sum=0,leap=0;const pcs=new Set(),act=new Set();
+    ns.forEach((x,i)=>{
+      if(x.on<maxOff-tol)poly++;
+      maxOff=Math.max(maxOff,x.off);sum+=x.midi;pcs.add(x.midi);act.add(Math.floor(x.on/barT));
+      if(i)leap+=Math.abs(x.midi-ns[i-1].midi);
+    });
+    const mono=1-poly/n,mean=sum/n,step=n>1?leap/(n-1):0;
+    let s=2*mono+1.5*clamp((mean-48)/24,0,1)+act.size/bars;
+    if(mean>90)s-=1;
+    if(n<12)s-=3;
+    if(pcs.size<5)s-=1;
+    s+=step<=4?.5:step>7?-.5:0;
+    if(/melod|vocal|vox|voice|lead|sing|solo|tune|verse/i.test(pt.name))s+=3;
+    if(/bass|drum|perc|pad|chord|comp|rhythm|harmon|backing|strings/i.test(pt.name))s-=2;
+    if(pt.fam==='Bass')s-=2;
+    pt.mono=mono;pt.score=s;
+  });
+  let best=0;
+  song.parts.forEach((pt,i)=>{if(pt.score>song.parts[best].score)best=i;});
+  return best;
+}
+/* top line of a part: the highest note at each moment; notes that start under a held higher note are accompaniment */
+function skyline(notes,ppq,mono){
+  const tol=ppq/16;let out=[];
+  for(const n of notes){
+    const p=out[out.length-1];
+    if(p&&n.on-p.on<=tol){if(n.midi>p.midi){p.midi=n.midi;p.off=n.off;}continue;}
+    if(p&&p.off>n.on+tol&&p.midi>n.midi)continue;
+    out.push({midi:n.midi,on:n.on,off:n.off});
+  }
+  if(mono<0.85&&out.length>8){
+    const srt=out.map(n=>n.midi).sort((a,b)=>a-b),med=srt[srt.length>>1];
+    out=out.filter(n=>n.midi>=med-12);
+  }
+  out.forEach((n,i)=>{const x=out[i+1];if(x&&n.off>x.on)n.off=x.on;});
+  return out;
+}
+/* what the app needs from a song: melody notes on the app's clock (0 = the bar line before the first melody note),
+   the song's tempo and metre, and every other pitched note for reading the chords */
+function songInput(song,idx){
+  const part=song.parts[idx],beats=songMeter(song),M=beats*4,q=song.tempo/1000;
+  const s16=t=>t/song.ppq*4;
+  const mel=skyline(part.notes,song.ppq,part.mono==null?1:part.mono);
+  const off=Math.floor((s16(mel[0].on)+.01)/M)*M;
+  const notes=mel.map(n=>({midi:n.midi,on:(s16(n.on)-off)*q/4,off:(s16(n.off)-off)*q/4}));
+  const pitched=song.parts.filter(pt=>!pt.drum&&pt.notes.length),others=pitched.filter(pt=>pt!==part);
+  const flat=ps=>[].concat(...ps.map(pt=>pt.notes.map(n=>({midi:n.midi,s:s16(n.on),e:s16(n.off)})))).sort((a,b)=>a.s-b.s);
+  const harm=flat(others.length?others:[part]);
+  const odd=mel.filter(n=>{const x=s16(n.on),r=Math.round(x);return Math.abs(x-r)<.26&&r%2!==0;}).length;
+  const key=detectKey(flat(pitched).map(n=>({midi:n.midi,w:n.e-n.s})));
+  return {notes,q,beats,off,harm,grid:odd/mel.length>.12?1:2,key,count:mel.length,alone:!others.length};
+}
+/* the chord the song plays between two points (in sixteenths of the song), or null when nothing pitched sounds */
+const TEMPL={maj:{t:[0,4,7],n:[2,9,11]},min:{t:[0,3,7],n:[2,5,10]},dom:{t:[0,4,7,10],n:[2,9]},hdim:{t:[0,3,6,10],n:[]},dim:{t:[0,3,6],n:[9]}};
+function chordAt(harm,a,b,key,cands){
+  const h=new Array(12).fill(0),span=b-a;let tot=0,bass=null;
+  for(const n of harm){
+    if(n.s>=b)break;
+    const ov=Math.min(n.e,b)-Math.max(n.s,a);
+    if(ov<=0)continue;
+    const w=ov*(n.midi<52?1.3:1);
+    h[n.midi%12]+=w;tot+=w;
+    if(ov>=span*.15&&(bass==null||n.midi<bass))bass=n.midi;
+  }
+  if(tot<span*.08)return null;
+  let best=null;
+  for(let r=0;r<12;r++)for(const fam in TEMPL){
+    const T=TEMPL[fam];
+    if(fam==='dom'&&h[(r+10)%12]<tot*.07)continue;
+    let s=0;
+    for(let pc=0;pc<12;pc++){
+      if(!h[pc])continue;
+      const iv=mod(pc-r,12);
+      if(T.t.includes(iv))s+=h[pc]*(iv===0?1.1:1);else if(!T.n.includes(iv))s-=.7*h[pc];
+    }
+    s/=tot;
+    if(bass!=null&&bass%12===r)s+=.3;
+    if(!h[(r+T.t[1])%12])s-=.1;
+    if(cands.some(c=>c.kind==='d'&&c.root===r&&(c.fam===fam||(c.fam==='dom'&&fam==='maj'))))s+=.06;
+    if(!best||s>best.s)best={s,r,fam};
+  }
+  let fam=best.fam;const r=best.r,o=mod(r-key.tonic,12);
+  /* a plain major triad on these steps works as a dominant; voice it as one so added sevenths stay in the song's key */
+  if(fam==='maj'&&(key.mode==='major'?[7,2,4,9,11]:[7,0,2]).includes(o))fam='dom';
+  const id=r+':'+fam;
+  return cands.find(c=>c.id===id)||{id,root:r,fam,prior:0,kind:fam==='dom'&&o===7?'d':'x',target:null};
+}
+/* one segment per chord window; a window with no melody note still gets a segment when the song changes chord there */
+function songSegments(sc,song,key,vocab){
+  const cands=candidates(key,vocab),segs=[],starts=[],fixed=[];let prev=null;
+  for(let k=0;k<sc.total;k+=sc.W){
+    const notes=sc.mel.filter(n=>n.start>=k&&n.start<k+sc.W);
+    const c=chordAt(song.harm,k+song.off,k+sc.W+song.off,key,cands);
+    if(!notes.length&&(!c||(prev&&c.id===prev.id)))continue;
+    if(!notes.length){
+      let carry=sc.mel[0];
+      sc.mel.forEach(n=>{if(n.start<k)carry=n;});
+      notes.carry=carry;notes.sounding=carry.start<k&&carry.start+carry.dur>k;
+    }
+    segs.push(notes);starts.push(k);fixed.push(c);
+    if(c)prev=c;
+  }
+  if(starts.length)starts[0]=0;
+  return {segs,starts,fixed};
+}
+/* top note for a chord that arrives while the melody rests or holds: the melody note if it fits, else the nearest chord tone */
+function carryTarget(m,ch){
+  const f=x=>FIT[ch.fam][mod(x-ch.root,12)];
+  if(f(m)>=.4)return m;
+  for(let d=1;d<=6;d++){if(f(m-d)>=.9)return m-d;if(f(m+d)>=.9)return m+d;}
+  return m;
+}
+if(typeof module!=='undefined')module.exports={parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
 </script>
 
 <script>
@@ -920,15 +1117,15 @@ if(typeof module!=='undefined')module.exports={analyze,GENRES,STRATEGIES,HARMONY
 /* ---------- app ---------- */
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S={notes:[],held:new Map(),capture:true,demo:false,mode:'genre',genre:'jazz',strategies:['rootless','shell'],harmony:'sevenths',keySel:'auto',seg:'t4',pins:{},monitor:true,base:60,input:'free',grid:2,bpm:'',every:'bar',scoreVoicing:0,qscale:1,inst:'piano',meter:0,layout:'h',learn:false};
+const S={notes:[],held:new Map(),capture:true,demo:false,mode:'genre',genre:'jazz',strategies:['rootless','shell'],harmony:'sevenths',keySel:'auto',seg:'t4',pins:{},monitor:true,base:60,input:'free',grid:2,bpm:'',every:'bar',scoreVoicing:0,qscale:1,inst:'piano',meter:0,layout:'h',learn:false,song:null,chordSrc:'song'};
 let R=null, timer=null, playing=null, stale=false, lastMel=null, melTimers=[];
 
-try{const s=JSON.parse(localStorage.getItem('chordVoicer')||'null');if(s)['mode','genre','strategies','harmony','seg','monitor','input','meter','grid','every','qscale','inst','layout','learn'].forEach(k=>{if(s[k]!=null)S[k]=s[k];});}catch(e){}
+try{const s=JSON.parse(localStorage.getItem('chordVoicer')||'null');if(s)['mode','genre','strategies','harmony','seg','monitor','input','meter','grid','every','qscale','inst','layout','learn','chordSrc'].forEach(k=>{if(s[k]!=null)S[k]=s[k];});}catch(e){}
 if(!GENRES[S.genre])S.genre='jazz';
 S.strategies=(Array.isArray(S.strategies)?S.strategies:[]).filter(id=>STRATEGIES[id]);
 if(!S.strategies.length)S.strategies=['rootless'];
 if(!HARMONY[S.harmony])S.harmony='sevenths';
-function save(){try{localStorage.setItem('chordVoicer',JSON.stringify({mode:S.mode,genre:S.genre,strategies:S.strategies,harmony:S.harmony,seg:S.seg,monitor:S.monitor,input:S.input,meter:S.meter,grid:S.grid,every:S.every,qscale:S.qscale,inst:S.inst,layout:S.layout,learn:S.learn}));}catch(e){}}
+function save(){try{localStorage.setItem('chordVoicer',JSON.stringify({mode:S.mode,genre:S.genre,strategies:S.strategies,harmony:S.harmony,seg:S.seg,monitor:S.monitor,input:S.input,meter:S.meter,grid:S.grid,every:S.every,qscale:S.qscale,inst:S.inst,layout:S.layout,learn:S.learn,chordSrc:S.chordSrc}));}catch(e){}}
 
 /* sound */
 let ac=null;
@@ -1144,7 +1341,7 @@ function cleanUp(){
   m.textContent='Cleaned up: '+bits.join(', ')+'. '+st.before+' notes before, '+st.after+' after. Tap Undo clean-up to get your original take back.';
 }
 /* an example can pin its own key; go back to detecting once the example is gone */
-function dropDemo(){S.demo=false;if(S.demoKey){S.demoKey=false;S.keySel='auto';$('keySel').value='auto';}}
+function dropDemo(){S.demo=false;if(S.song){S.song=null;songUi();}if(S.demoKey){S.demoKey=false;S.keySel='auto';$('keySel').value='auto';}}
 /* note capture */
 function noteOn(midi,vel,src){
   if(S.demo){S.notes=[];dropDemo();S.pins={};}
@@ -1218,6 +1415,41 @@ async function readRecording(file){
     useVoiceNotes(notesFromFrames(frames));
   }catch(err){
     voiceStatus('That file could not be read as audio. Try a voice memo (m4a), mp3 or wav.',true);
+  }
+}
+
+/* song file */
+function songStatus(t,warn){const el=$('songStatus');el.textContent=t;el.classList.toggle('warn',!!warn);}
+function songUi(){
+  const on=!!S.song;
+  ['partWrap','srcWrap','srcWrap2'].forEach(id=>{$(id).hidden=!on;});
+  $('qscaleSel').disabled=on;
+  ['srcSel','srcSel2'].forEach(id=>{$(id).value=S.chordSrc==='new'?'new':'song';});
+  if(!on){songStatus('Pick a .mid file of a song. The app finds the melody, writes it out, and voices the chords the song plays so you can play along.');return;}
+  $('partSel').innerHTML=S.song.data.parts.map((pt,i)=>pt.drum||!pt.notes.length?'':'<option value="'+i+'">'+esc(pt.name)+' · '+pt.notes.length+' notes</option>').join('');
+  $('partSel').value=S.song.part;
+}
+function useSongPart(i,first){
+  const sg=S.song,r=songInput(sg.data,i);
+  Object.assign(sg,{part:i,q:r.q,beats:r.beats,off:r.off,harm:r.harm});
+  S.notes=r.notes;S.held.clear();S.pins={};S.demo=sg.name;cleanState=null;
+  if(first){S.grid=r.grid;S.keySel=r.key.tonic+':'+r.key.mode;S.demoKey=true;S.input='score';S.scoreVoicing=0;}
+  stopAll();save();renderControls();songUi();update();
+  const pt=sg.data.parts[i];
+  songStatus('Loaded '+sg.name+'. Melody: '+pt.name+', '+r.count+' notes, '+Math.round(60000/r.q)+' BPM, '+r.key.label+'. '+
+    (r.alone?'This file has a single part, so the top line is the melody and the chords are read from all of its notes.':'If the melody looks wrong, pick another part under Melody part.'));
+}
+async function readSong(file){
+  if(!file)return;
+  songStatus('Reading '+file.name+'…');
+  try{
+    const data=parseMidi(await file.arrayBuffer()),best=rateParts(data);
+    S.song={name:file.name.replace(/\.[^.]+$/,'').slice(0,40),data};
+    useSongPart(best,true);
+  }catch(err){
+    const m=err&&err.message;
+    if(S.song&&!S.song.harm)S.song=null;
+    songStatus(m==='empty'?'That MIDI file has no notes in it.':m==='smpte'?'That MIDI file uses a timing format this page cannot read. Export it again with normal (beats) timing.':'That file could not be read as MIDI. Pick a .mid file.',true);
   }
 }
 
@@ -1334,7 +1566,8 @@ function voicingHtml(v,key,lo,hi,ref,ch){
 function run(){
   const st=settings();
   return analyze(S.notes,{now:performance.now(),keySel:S.keySel,seg:S.seg,vocab:st.vocab,strategies:st.strategies,pins:S.pins,
-    score:S.input==='score'?{beats:+S.meter||0,grid:+S.grid,scale:+S.qscale||1,chordEvery:S.every}:null});
+    score:S.input==='score'?{beats:+S.meter||(S.song?S.song.beats:0),grid:+S.grid,scale:S.song?1:(+S.qscale||1),chordEvery:S.every,q:S.song?S.song.q:0}:null,
+    song:S.song&&S.chordSrc==='song'?{harm:S.song.harm,off:S.song.off}:null});
 }
 function drawMelody(M){
   const key=M.key;lastMel=M;$('melPlay').disabled=!M.count;
@@ -1342,7 +1575,7 @@ function drawMelody(M){
   $('cleanBtn').textContent=cleaned?'Undo clean-up':'Clean up';$('cleanBtn').disabled=!cleaned&&(M.count<2||!!S.demo);
   if(!cleaned)$('cleanMsg').hidden=true;
   $('keyOut').textContent=M.count?('Key: '+key.label+(S.keySel==='auto'?' (detected)':'')):'Key: –';
-  $('demoBadge').hidden=!S.demo;$('demoBadge').textContent='Example: '+(S.demo||'');
+  $('demoBadge').hidden=!S.demo;$('demoBadge').textContent=(S.song?'Song: ':'Example: ')+(S.demo||'');
   $('strip').innerHTML=M.count?M.segs.map((sg,i)=>(i?'<span class="bar" aria-hidden="true"></span>':'')+sg.notes.map(n=>'<span class="n">'+noteName(n.midi,key)+'</span>').join('')).join(''):'<span class="small">No notes yet. Play something.</span>';
 }
 function setStale(v){
@@ -1409,7 +1642,7 @@ function scoreHtml(res,mode,width,minW,layKey){
   addRest(staves[0],cur,sc.total-cur);
   if(full)sc.chords.forEach(c=>{
     const sg=res.segs[c.seg],v=sg.voicings[S.scoreVoicing];
-    const all=v.lh.map(m=>({midi:m,c:'lh',ch:sg.chord})).concat(v.rh.filter(m=>!(m===v.T&&!sg.shift)).map(m=>({midi:m,c:m===v.T?'mel':'rh',ch:sg.chord})));
+    const all=v.lh.map(m=>({midi:m,c:'lh',ch:sg.chord})).concat(v.rh.filter(m=>!(m===v.T&&!sg.shift&&!sg.own)).map(m=>({midi:m,c:m===v.T?'mel':'rh',ch:sg.chord})));
     [[staves[1],all.filter(n=>n.midi>=60)],[staves[2],all.filter(n=>n.midi<60)]].forEach(([st,ns])=>ns.length?addNotes(st,c.start,c.dur,ns):addRest(st,c.start,c.dur));
   });
   const nMeas=sc.total/M,nSys=Math.ceil(nMeas/per);
@@ -1479,7 +1712,7 @@ function scoreHtml(res,mode,width,minW,layKey){
       /* the voicing for each chord as a fingered keyboard, drawn under the beat where it starts */
       if(!inSys(c.start))return;
       const sg=res.segs[c.seg],v=sg.voicings[S.scoreVoicing],x0=xOf(c.start)-8,wpx=Math.min(c.dur*uw-6,xEnd-x0-4);
-      const rh=v.rh.filter(m=>!(m===v.T&&!sg.shift)),nm=a=>a.map(n=>vName(n,sg.chord,key)).join(' ');
+      const rh=v.rh.filter(m=>!(m===v.T&&!sg.shift&&!sg.own)),nm=a=>a.map(n=>vName(n,sg.chord,key)).join(' ');
       if(wpx>=96){
         const kw=Math.min(wpx,240),kh=kw*KBH/kbWidth(klo,khi);
         g+='<rect class="kbhl" data-c="'+c.seg+'" x="'+(x0-4)+'" y="'+(KY-3)+'" width="'+(kw+8)+'" height="'+(kh+6)+'" rx="4"/>';
@@ -1517,7 +1750,7 @@ function renderScore(res,full){
   lastScore=[res,full];
   if(S.input!=='score')return;
   const sc=res&&res.score;
-  $('tempoOut').textContent=sc?('Played at '+sc.bpm+' BPM'+(S.learn?', learning at '+Math.round(playBpm(sc)):'')+(sc.meterAuto?' · '+sc.beats+'/4 detected':'')):'Tempo: –';
+  $('tempoOut').textContent=sc?((sc.known?'Song tempo ':'Played at ')+sc.bpm+' BPM'+(S.learn?', learning at '+Math.round(playBpm(sc)):'')+(sc.meterAuto?' · '+sc.beats+'/4 detected':'')):'Tempo: –';
   if(!sc){$('scoreNow').hidden=true;host.innerHTML='<p class="empty">Play, sing or load a melody to see it written out.</p>';$('scoreNote').textContent='';$('scoreVoicingChips').innerHTML='';return;}
   const names=full&&res.segs.length?res.segs[0].voicings.map(v=>v.name):[];
   if(S.scoreVoicing>=names.length)S.scoreVoicing=0;
@@ -1527,7 +1760,7 @@ function renderScore(res,full){
   const showNow=full&&S.layout!=='rows'&&res.segs.length>0;
   $('scoreNow').hidden=!showNow;
   if(showNow){if(nowIdx>=sc.chords.length)nowIdx=0;$('scoreNow').innerHTML=nowHtml(res,nowIdx);}
-  $('scoreNote').textContent=(full?'Top staff is your melody. The piano staves show the chosen voicing on the beat where each chord starts, and the keyboard '+(S.layout!=='rows'?'below shows the chord being played, switching half a beat early so you can see it coming':'under them shows the same notes')+', with suggested fingers (1 is the thumb). ':'')+(sc.oct?'Melody written '+Math.abs(sc.oct)+' octave'+(Math.abs(sc.oct)>1?'s ':' ')+(sc.oct>0?'up':'down')+' so the chords have room underneath. ':'')+'The first note is treated as beat 1.';
+  $('scoreNote').textContent=(full?'Top staff is your melody. The piano staves show the chosen voicing on the beat where each chord starts, and the keyboard '+(S.layout!=='rows'?'below shows the chord being played, switching half a beat early so you can see it coming':'under them shows the same notes')+', with suggested fingers (1 is the thumb). ':'')+(sc.oct?'Melody written '+Math.abs(sc.oct)+' octave'+(Math.abs(sc.oct)>1?'s ':' ')+(sc.oct>0?'up':'down')+' so the chords have room underneath. ':'')+(sc.known?'Bar lines and tempo come from the song file.'+(S.song&&S.chordSrc==='song'?' Chords are the ones the song plays; switch Chords to New to reharmonize the melody instead.':''):'The first note is treated as beat 1.');
 }
 function renderPlayView(){
   if($('playView').hidden)return;
@@ -1578,7 +1811,7 @@ const DEMOS={
     [65,1],[65,1],[65,1.5],[65,.5],[65,1],[64,1],[64,1],[64,.5],[64,.5],[67,1],[67,1],[65,1],[62,1],[60,4]]}
 };
 function loadDemo(id){
-  const d=DEMOS[id]||DEMOS.ode;let t=0;S.notes=[];
+  const d=DEMOS[id]||DEMOS.ode;let t=0;S.notes=[];if(S.song){S.song=null;songUi();}
   d.seq.forEach(([m,b])=>{S.notes.push({midi:m,on:t,off:t+d.q*b-30});t+=d.q*b;});
   S.demo=d.name;S.pins={};S.keySel=d.key||'auto';S.demoKey=!!d.key;$('keySel').value=S.keySel;stopAll();update();
 }
@@ -1677,7 +1910,7 @@ function playAll(){
       const bus=a.createGain();bus.connect(master(a));scoreBus=bus;
       sc.mel.forEach(n=>toneNow(a,n.midi,.06+n.start*spu,Math.max(.4,n.dur*spu*1.4),.8,bus));
       sc.chords.forEach(c=>{const sg=res.segs[c.seg],v=sg.voicings[Math.min(S.scoreVoicing,sg.voicings.length-1)];
-        v.lh.concat(v.rh).filter(m=>!(m===v.T&&!sg.shift)).forEach(m=>toneNow(a,m,.06+c.start*spu,Math.max(.7,c.dur*spu*1.25),.38,bus));});
+        v.lh.concat(v.rh).filter(m=>!(m===v.T&&!sg.shift&&!sg.own)).forEach(m=>toneNow(a,m,.06+c.start*spu,Math.max(.7,c.dur*spu*1.25),.38,bus));});
       anim={t0:a.currentTime+.06,spu,total:sc.total,chords:sc.chords,sys:-1,chord:-1,now:-1,raf:0};
       tick();
     };
@@ -1803,6 +2036,9 @@ function init(){
   $('keySel').onchange=e=>{S.keySel=e.target.value;S.demoKey=false;S.pins={};update();};
   $('micBtn').onclick=()=>{mic?stopMic():startMic();};
   $('voiceFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readRecording(f);};
+  $('songFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readSong(f);};
+  $('partSel').onchange=e=>{if(S.song)useSongPart(+e.target.value,false);};
+  ['srcSel','srcSel2'].forEach(id=>{$(id).onchange=e=>{S.chordSrc=e.target.value;S.scoreVoicing=0;stopAll();changed();songUi();};});
   $('playAll').onclick=playAll;
   const showPV=on=>{$('playView').hidden=!on;document.querySelector('main').hidden=on;window.scrollTo(0,0);if(on)renderPlayView();else if(lastScore)renderScore(lastScore[0],lastScore[1]);};
   $('pvOpen').onclick=()=>showPV(true);
