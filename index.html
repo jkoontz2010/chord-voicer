@@ -1619,7 +1619,10 @@ function tick(){
       const cx=(sys===0?lay.headFirst:lay.head)+(m-sys*lay.per)*lay.measW+16+(t%lay.M)*lay.uw;
       if(cur){cur.setAttribute('x',cx-1.5);cur.style.display='block';}
       if(lay.horiz&&autoScroll){   /* slide the long line under a playhead held about a third of the way across */
-        const want=Math.max(0,Math.min(host.scrollWidth-host.clientWidth,cx*lay.zoom-host.clientWidth*.32));
+        /* Notes are packed slightly tighter than a bar is wide (bar lines need room), so the playhead hops a little at each
+           bar line. The scroll must not hop with it: it moves at one steady speed across the whole bar. */
+        const sx=(sys===0?lay.headFirst:lay.head)+(t/lay.M-sys*lay.per)*lay.measW+16;
+        const want=Math.max(0,Math.min(host.scrollWidth-host.clientWidth,sx*lay.zoom-host.clientWidth*.32));
         if(Math.abs(host.scrollLeft-want)>.5)host.scrollLeft=want;
         /* some phone browsers ignore scrollLeft set from script: slide the drawing itself the rest of the way */
         const miss=want-host.scrollLeft;
