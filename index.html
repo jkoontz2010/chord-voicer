@@ -224,9 +224,9 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
       <h2>Melody</h2>
       <div class="row"><span class="badge" id="demoBadge" hidden></span><span class="badge" id="keyOut">Key: –</span><button class="btn" id="cleanBtn" type="button">Clean up</button><button class="btn" id="melPlay" type="button">Play melody</button></div>
     </div>
-    <div class="strip" id="strip"></div>
+    <div class="strip" id="strip" hidden></div>
     <p class="small" id="cleanMsg" hidden></p>
-    <p class="small">Bars mark where the chord changes. If you play several notes at once, the top one counts as melody.</p>
+    <p class="small"><span id="melCount">No notes yet. Play something.</span> If you play several notes at once, the top one counts as melody.</p>
   </section>
 
   <section class="panel" id="scorePanel" aria-label="Score" hidden>
@@ -1603,7 +1603,7 @@ function drawMelody(M){
   if(!cleaned)$('cleanMsg').hidden=true;
   $('keyOut').textContent=M.count?('Key: '+key.label+(S.keySel==='auto'?' (detected)':'')):'Key: –';
   $('demoBadge').hidden=!S.demo;$('demoBadge').textContent=(S.song?'Song: ':'Example: ')+(S.demo||'');
-  $('strip').innerHTML=M.count?M.segs.map((sg,i)=>(i?'<span class="bar" aria-hidden="true"></span>':'')+sg.notes.map(n=>'<span class="n">'+noteName(n.midi,key)+'</span>').join('')).join(''):'<span class="small">No notes yet. Play something.</span>';
+  $('melCount').textContent=M.count?M.count+' note'+(M.count>1?'s':'')+'.':'No notes yet. Play something.';
 }
 function setStale(v){
   stale=v;$('pvStale').hidden=!v;
