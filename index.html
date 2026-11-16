@@ -77,6 +77,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
 .hn{font:500 10px var(--mono);fill:var(--c)}
 .hl{font:700 8px var(--body);fill:var(--c)}
 #score{display:flex;flex-direction:column;gap:22px}
+#score.horiz,#pvBody.horiz{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
 #score svg{display:block;width:100%;height:auto}
 .sl{stroke:var(--ink);stroke-width:.7;opacity:.5}
 .bl{stroke:var(--ink);stroke-width:1}
@@ -229,6 +230,9 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
       </label>
       <label class="field">Playback speed (BPM)
         <input type="number" id="bpmIn" min="30" max="240" step="1" placeholder="as played" inputmode="numeric" style="width:7.5em">
+      </label>
+      <label class="field">Layout
+        <select id="layoutSel"><option value="h">One line, scrolls sideways</option><option value="rows">Rows</option></select>
       </label>
       <label class="field">New chord
         <select id="everySel"><option value="bar">Every bar</option><option value="half">Twice a bar</option><option value="beat">Every beat</option></select>
@@ -908,15 +912,15 @@ if(typeof module!=='undefined')module.exports={analyze,GENRES,STRATEGIES,HARMONY
 /* ---------- app ---------- */
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S={notes:[],held:new Map(),capture:true,demo:false,mode:'genre',genre:'jazz',strategies:['rootless','shell'],harmony:'sevenths',keySel:'auto',seg:'t4',pins:{},monitor:true,base:60,input:'free',grid:2,bpm:'',every:'bar',scoreVoicing:0,qscale:1,inst:'piano',meter:0};
+const S={notes:[],held:new Map(),capture:true,demo:false,mode:'genre',genre:'jazz',strategies:['rootless','shell'],harmony:'sevenths',keySel:'auto',seg:'t4',pins:{},monitor:true,base:60,input:'free',grid:2,bpm:'',every:'bar',scoreVoicing:0,qscale:1,inst:'piano',meter:0,layout:'h'};
 let R=null, timer=null, playing=null, stale=false, lastMel=null, melTimers=[];
 
-try{const s=JSON.parse(localStorage.getItem('chordVoicer')||'null');if(s)['mode','genre','strategies','harmony','seg','monitor','input','meter','grid','every','qscale','inst'].forEach(k=>{if(s[k]!=null)S[k]=s[k];});}catch(e){}
+try{const s=JSON.parse(localStorage.getItem('chordVoicer')||'null');if(s)['mode','genre','strategies','harmony','seg','monitor','input','meter','grid','every','qscale','inst','layout'].forEach(k=>{if(s[k]!=null)S[k]=s[k];});}catch(e){}
 if(!GENRES[S.genre])S.genre='jazz';
 S.strategies=(Array.isArray(S.strategies)?S.strategies:[]).filter(id=>STRATEGIES[id]);
 if(!S.strategies.length)S.strategies=['rootless'];
 if(!HARMONY[S.harmony])S.harmony='sevenths';
-function save(){try{localStorage.setItem('chordVoicer',JSON.stringify({mode:S.mode,genre:S.genre,strategies:S.strategies,harmony:S.harmony,seg:S.seg,monitor:S.monitor,input:S.input,meter:S.meter,grid:S.grid,every:S.every,qscale:S.qscale,inst:S.inst}));}catch(e){}}
+function save(){try{localStorage.setItem('chordVoicer',JSON.stringify({mode:S.mode,genre:S.genre,strategies:S.strategies,harmony:S.harmony,seg:S.seg,monitor:S.monitor,input:S.input,meter:S.meter,grid:S.grid,every:S.every,qscale:S.qscale,inst:S.inst,layout:S.layout}));}catch(e){}}
 
 /* sound */
 let ac=null;
@@ -1384,7 +1388,8 @@ function scoreHtml(res,mode,width,minW,layKey){
   const [klo,khi]=(lead||full)?tightRange(res.segs.map(sg=>sg.voicings[S.scoreVoicing])):[48,83];
   const key=res.key,ks=keySig(key),M=sc.M,uw=(sc.grid===1?14:11)+3,measW=M*uw+20,nAcc=Math.abs(ks.f);
   const head=40+nAcc*7+8,headFirst=head+20;
-  const per=Math.max(1,Math.floor((Math.max(width||640,minW)-headFirst-6)/measW));
+  /* sideways layout: every bar on one long line that scrolls; rows layout: as many bars as fit, then wrap */
+  const horiz=S.layout!=='rows',zoom=1.2,per=horiz?Math.max(1,sc.total/M):Math.max(1,Math.floor((Math.max(width||640,minW)-headFirst-6)/measW));
   const vbW=headFirst+per*measW+6,kbMax=Math.min(240,M*uw-6)*KBH/kbWidth(klo,khi),KY=lead?108:282,H=full?Math.ceil(KY+kbMax+6):lead?Math.ceil(KY+kbMax+34):112;
   const staves=[{top:50,bot:30,clef:'g',ev:[]}];
   if(full)staves.push({top:148,bot:30,clef:'g',ev:[]},{top:218,bot:18,clef:'f',ev:[]});
@@ -1399,7 +1404,7 @@ function scoreHtml(res,mode,width,minW,layKey){
     [[staves[1],all.filter(n=>n.midi>=60)],[staves[2],all.filter(n=>n.midi<60)]].forEach(([st,ns])=>ns.length?addNotes(st,c.start,c.dur,ns):addRest(st,c.start,c.dur));
   });
   const nMeas=sc.total/M,nSys=Math.ceil(nMeas/per);
-  if(layKey)LAY[layKey]={per,M,head,headFirst,measW,uw};
+  if(layKey)LAY[layKey]={per,M,head,headFirst,measW,uw,horiz,zoom};
   if(anim)anim.sys=anim.chord=-1;
   let html='';
   for(let s=0;s<nSys;s++){
@@ -1479,7 +1484,7 @@ function scoreHtml(res,mode,width,minW,layKey){
       }
     });
     g+='<rect class="cur" x="0" y="36" width="3" height="'+(full?218:50)+'" rx="1.5" style="display:none"/>';
-    html+='<svg class="sys" viewBox="0 0 '+vbW+' '+H+'" role="img" aria-label="Score, line '+(s+1)+'">'+g+'</svg>';
+    html+='<svg class="sys"'+(horiz?' style="width:'+Math.round(vbW*zoom)+'px;max-width:none"':'')+' viewBox="0 0 '+vbW+' '+H+'" role="img" aria-label="Score, line '+(s+1)+'">'+g+'</svg>';
   }
   return html;
 }
@@ -1493,6 +1498,7 @@ function renderScore(res,full){
   const names=full&&res.segs.length?res.segs[0].voicings.map(v=>v.name):[];
   if(S.scoreVoicing>=names.length)S.scoreVoicing=0;
   $('scoreVoicingChips').innerHTML=names.length>1?'<span class="small">Voicing in the score</span>'+names.map((n,i)=>'<button class="chip'+(i===S.scoreVoicing?' pinned':'')+'" type="button" data-sv="'+i+'">'+esc(n)+'</button>').join(''):'';
+  host.classList.toggle('horiz',S.layout!=='rows');
   host.innerHTML=scoreHtml(res,full?'full':'mel',host.clientWidth,480,'score');
   $('scoreNote').textContent=(full?'Top staff is your melody. The piano staves show the chosen voicing on the beat where each chord starts, and the keyboard under them shows the same notes with suggested fingers (1 is the thumb). ':'')+(sc.oct?'Melody written '+Math.abs(sc.oct)+' octave'+(Math.abs(sc.oct)>1?'s ':' ')+(sc.oct>0?'up':'down')+' so the chords have room underneath. ':'')+'The first note is treated as beat 1.';
 }
@@ -1505,6 +1511,7 @@ function renderPlayView(){
   if(S.scoreVoicing>=names.length)S.scoreVoicing=0;
   $('pvVoicing').innerHTML=names.map((n,i)=>'<button class="chip'+(i===S.scoreVoicing?' pinned':'')+'" type="button" data-sv="'+i+'">'+esc(n)+'</button>').join('');
   $('pvTitle').textContent=(S.demo?S.demo+' · ':'')+R.key.label+(R.score?' · '+(+S.bpm||R.score.bpm)+' BPM':'');
+  body.classList.toggle('horiz',!!R.score&&S.layout!=='rows');
   if(R.score){body.innerHTML=scoreHtml(R,'lead',body.clientWidth,300,'pv');return;}
   const vs=R.segs.map(sg=>sg.voicings[S.scoreVoicing]),[lo,hi]=range(vs);
   body.innerHTML='<div class="cards big">'+R.segs.map((sg,i)=>'<article class="card" data-seg="'+i+'"><div class="head"><div class="sym">'+esc(sg.symbol)+'</div><div class="rn">'+(i+1)+' · '+esc(sg.roman)+'</div></div>'+
@@ -1516,7 +1523,7 @@ function renderControls(){
   $('scorePanel').hidden=S.input!=='score';
   $('segWrap').hidden=S.input==='score';
   $('modeHelp').textContent=S.input==='score'?'Score mode reads how long you hold each note, writes the melody as sheet music, and lines the voicings up under it.':'Free form ignores note lengths. Play the notes in any rhythm and get chord cards.';
-  $('beatsSel').value=S.meter;$('gridSel').value=S.grid;$('everySel').value=S.every;$('bpmIn').value=S.bpm;$('qscaleSel').value=S.qscale;
+  $('beatsSel').value=S.meter;$('gridSel').value=S.grid;$('everySel').value=S.every;$('bpmIn').value=S.bpm;$('qscaleSel').value=S.qscale;$('layoutSel').value=S.layout==='rows'?'rows':'h';
   $('modeGenre').setAttribute('aria-pressed',S.mode==='genre');
   $('modeStrategy').setAttribute('aria-pressed',S.mode==='strategy');
   $('genreChips').hidden=S.mode!=='genre';
@@ -1550,14 +1557,18 @@ function loadDemo(id){
 let scoreBus=null, anim=null, autoScroll=false, progUntil=0;
 const playLabels=on=>{$('playAll').textContent=on?'Stop':'Play all';$('scorePlay').textContent=on?'Stop':'Play all';$('pvPlay').textContent=on?'Stop':'Play';};
 /* scroll a row or card into view, but only while the listener has not touched the page since pressing Play */
-function follow(el){
+function follow(el,block){
   if(!autoScroll||!el)return;
   progUntil=performance.now()+400;
-  el.scrollIntoView({block:'start',behavior:'auto'});   /* jump, no glide */
+  el.scrollIntoView({block:block||'start',behavior:'auto'});   /* jump, no glide */
 }
 function userTouched(){if(playing)autoScroll=false;}
 ['wheel','touchstart','pointerdown','keydown'].forEach(ev=>window.addEventListener(ev,userTouched,{capture:true,passive:true}));
-window.addEventListener('scroll',()=>{if(performance.now()>progUntil)userTouched();},{capture:true,passive:true});
+window.addEventListener('scroll',e=>{
+  /* our own sideways scrolling lands exactly where we put it; anything else is the person scrolling */
+  if(anim&&e.target===anim.host&&Math.abs(e.target.scrollLeft-anim.want)<3)return;
+  if(performance.now()>progUntil)userTouched();
+},{capture:true,passive:true});
 function clearCursor(){
   document.querySelectorAll('.cur').forEach(c=>{c.style.display='none';});
   document.querySelectorAll('.kbhl.on').forEach(c=>c.classList.remove('on'));
@@ -1572,12 +1583,17 @@ function tick(){
     if(lay&&svgs.length){
       const m=Math.floor(t/lay.M),sys=Math.min(svgs.length-1,Math.floor(m/lay.per));
       if(sys!==anim.sys){
-        clearCursor();anim.sys=sys;anim.chord=-1;follow(svgs[sys]);
+        clearCursor();anim.sys=sys;anim.chord=-1;follow(svgs[sys],lay.horiz?'nearest':'start');
         anim.heads=Array.from(svgs[sys].querySelectorAll('.hd')).map(el=>({el,s:+el.dataset.s,e:+el.dataset.e,on:false}));
       }
       anim.heads.forEach(h=>{const on=t>=h.s&&t<h.e;if(on!==h.on){h.on=on;h.el.classList.toggle('play',on);}});
       const cur=svgs[sys].querySelector('.cur');
-      if(cur){cur.setAttribute('x',(sys===0?lay.headFirst:lay.head)+(m-sys*lay.per)*lay.measW+16+(t%lay.M)*lay.uw-1.5);cur.style.display='block';}
+      const cx=(sys===0?lay.headFirst:lay.head)+(m-sys*lay.per)*lay.measW+16+(t%lay.M)*lay.uw;
+      if(cur){cur.setAttribute('x',cx-1.5);cur.style.display='block';}
+      if(lay.horiz&&autoScroll){   /* slide the long line under a playhead held about a third of the way across */
+        const want=Math.max(0,Math.min(host.scrollWidth-host.clientWidth,cx*lay.zoom-host.clientWidth*.32));
+        if(Math.abs(host.scrollLeft-want)>.5){anim.host=host;anim.want=want;host.scrollLeft=want;anim.want=host.scrollLeft;}
+      }
       const ci=anim.chords.findIndex(c=>t>=c.start&&t<c.start+c.dur);
       if(ci!==anim.chord){
         anim.chord=ci;
@@ -1768,6 +1784,7 @@ function init(){
   $('everySel').onchange=e=>{S.every=e.target.value;changed();};
   $('bpmIn').onchange=e=>{const v=+e.target.value;S.bpm=v>=30&&v<=240?v:'';e.target.value=S.bpm;stopAll();if(lastScore)renderScore(lastScore[0],lastScore[1]);renderPlayView();};
   $('qscaleSel').onchange=e=>{S.qscale=+e.target.value;changed();};
+  $('layoutSel').onchange=e=>{S.layout=e.target.value;stopAll();save();if(lastScore)renderScore(lastScore[0],lastScore[1]);renderPlayView();};
   $('scoreVoicingChips').onclick=e=>{const b=e.target.closest('[data-sv]');if(b){S.scoreVoicing=+b.dataset.sv;stopAll();if(lastScore)renderScore(lastScore[0],lastScore[1]);}};
   let rz=null;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(lastScore)renderScore(lastScore[0],lastScore[1]);renderPlayView();},150);});
   $('refreshBtn').onclick=()=>{stopAll();update();};
