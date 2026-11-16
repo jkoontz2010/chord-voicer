@@ -77,6 +77,13 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
 .hn{font:500 10px var(--mono);fill:var(--c)}
 .hl{font:700 8px var(--body);fill:var(--c)}
 #score{display:flex;flex-direction:column;gap:22px}
+/* the fixed keyboard reserves its height so nothing jumps when the chord changes */
+.now{max-width:600px;width:100%;margin:0 auto;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:6px}
+.now .head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.now .sym{font:700 1.7rem/1 var(--display)}
+.now .rn{font:500 .9rem var(--mono);color:var(--muted)}
+.now .voicing{border-top:0;padding-top:0}
+.now .notes{font-size:.95rem;min-height:3.2em}
 #score.horiz,#pvBody.horiz{display:block;overflow-x:auto;padding-bottom:6px}
 #score svg{display:block;width:100%;height:auto}
 .sl{stroke:var(--ink);stroke-width:.7;opacity:.5}
@@ -241,6 +248,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
     <div class="row" id="scoreGenreChips" role="group" aria-label="Genre"></div>
     <div class="row" id="scoreVoicingChips" role="group" aria-label="Voicing shown in the score"></div>
     <div id="score"></div>
+    <div class="now" id="scoreNow" hidden></div>
     <p class="small" id="scoreNote"></p>
   </section>
 
@@ -319,6 +327,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
   <div class="row" id="pvVoicing" role="group" aria-label="Voicing shown"></div>
   <p class="status warn" id="pvStale" hidden>The melody changed since these voicings were made. <button class="chip" id="pvRefresh" type="button">Refresh</button></p>
   <div id="pvBody"></div>
+  <div class="now" id="pvNow" hidden></div>
   <div class="swatches"><span><i class="sw" style="background:var(--lh)"></i>Left hand</span><span><i class="sw" style="background:var(--rh)"></i>Right hand</span><span><i class="sw" style="background:var(--mel)"></i>Melody</span></div>
   <p class="small">Numbers are suggested fingers: 1 is the thumb, 5 the little finger. They sit under white keys and above black keys. A hand that plays a single note gets no number.</p>
 </div>
@@ -1348,6 +1357,7 @@ function update(){
   const st=settings();
   R=run();
   const key=R.key;
+  if(!anim)nowIdx=0;
   drawMelody(R);setStale(false);renderScore(R,true);renderPlayView();
   $('legend').innerHTML=st.strategies.map(id=>'<p><b>'+STRATEGIES[id].name+'.</b> '+STRATEGIES[id].desc+'</p>').join('');
   const all=[];R.segs.forEach(sg=>sg.voicings.forEach(v=>all.push(v)));
@@ -1390,7 +1400,7 @@ function scoreHtml(res,mode,width,minW,layKey){
   const head=40+nAcc*7+8,headFirst=head+20;
   /* sideways layout: every bar on one long line that scrolls; rows layout: as many bars as fit, then wrap */
   const horiz=S.layout!=='rows',zoom=1.2,per=horiz?Math.max(1,sc.total/M):Math.max(1,Math.floor((Math.max(width||640,minW)-headFirst-6)/measW));
-  const vbW=headFirst+per*measW+6,kbMax=Math.min(240,M*uw-6)*KBH/kbWidth(klo,khi),KY=lead?108:282,H=full?Math.ceil(KY+kbMax+6):lead?Math.ceil(KY+kbMax+34):112;
+  const vbW=headFirst+per*measW+6,kbMax=Math.min(240,M*uw-6)*KBH/kbWidth(klo,khi),KY=lead?108:282,H=horiz?(full?272:lead?106:112):full?Math.ceil(KY+kbMax+6):lead?Math.ceil(KY+kbMax+34):112;
   const staves=[{top:50,bot:30,clef:'g',ev:[]}];
   if(full)staves.push({top:148,bot:30,clef:'g',ev:[]},{top:218,bot:18,clef:'f',ev:[]});
   const addNotes=(st,start,dur,notes)=>{const ps=splitDur(start,dur,M);ps.forEach((p,i)=>st.ev.push({start:p.start,dur:p.dur,notes,tp:i>0,tn:i<ps.length-1}));};
@@ -1466,7 +1476,7 @@ function scoreHtml(res,mode,width,minW,layKey){
       for(let m=1;m<=mc;m++)g+=L(hx+m*measW,staves[1].top,hx+m*measW,staves[2].top+32,'bl');
     }
     if(full||lead)sc.chords.forEach(c=>{if(inSys(c.start))g+=TX(xOf(c.start)-6,lead?19:16,res.segs[c.seg].symbol,lead?'csym big':'csym');});
-    if(lead||full)sc.chords.forEach(c=>{
+    if((lead||full)&&!horiz)sc.chords.forEach(c=>{
       /* the voicing for each chord as a fingered keyboard, drawn under the beat where it starts */
       if(!inSys(c.start))return;
       const sg=res.segs[c.seg],v=sg.voicings[S.scoreVoicing],x0=xOf(c.start)-8,wpx=Math.min(c.dur*uw-6,xEnd-x0-4);
@@ -1488,30 +1498,48 @@ function scoreHtml(res,mode,width,minW,layKey){
   }
   return html;
 }
+/* sideways layout: one keyboard in a fixed spot shows the chord that is playing or about to play */
+let nowIdx=0;
+function nowHtml(res,ci){
+  const sc=res.score,c=sc.chords[Math.min(ci,sc.chords.length-1)],sg=res.segs[c.seg],v=sg.voicings[Math.min(S.scoreVoicing,sg.voicings.length-1)];
+  const [lo,hi]=tightRange(res.segs.map(x=>x.voicings[Math.min(S.scoreVoicing,x.voicings.length-1)]));
+  return '<div class="head"><div class="sym">'+esc(sg.symbol)+'</div><div class="rn">bar '+(Math.floor(c.start/sc.M)+1)+' · '+esc(sg.roman)+'</div></div>'+voicingHtml(v,res.key,lo,hi,'n:'+c.seg,sg.chord);
+}
+function setNow(i){
+  nowIdx=i;
+  if(!R||!R.score||!R.segs.length)return;
+  ['scoreNow','pvNow'].forEach(id=>{const el=$(id);if(!el.hidden)el.innerHTML=nowHtml(R,i);});
+}
 function renderScore(res,full){
   const host=$('score');
   lastScore=[res,full];
   if(S.input!=='score')return;
   const sc=res&&res.score;
   $('tempoOut').textContent=sc?('Played at '+sc.bpm+' BPM'+(+S.bpm?', playback '+S.bpm:'')+(sc.meterAuto?' · '+sc.beats+'/4 detected':'')):'Tempo: –';
-  if(!sc){host.innerHTML='<p class="empty">Play, sing or load a melody to see it written out.</p>';$('scoreNote').textContent='';$('scoreVoicingChips').innerHTML='';return;}
+  if(!sc){$('scoreNow').hidden=true;host.innerHTML='<p class="empty">Play, sing or load a melody to see it written out.</p>';$('scoreNote').textContent='';$('scoreVoicingChips').innerHTML='';return;}
   const names=full&&res.segs.length?res.segs[0].voicings.map(v=>v.name):[];
   if(S.scoreVoicing>=names.length)S.scoreVoicing=0;
   $('scoreVoicingChips').innerHTML=names.length>1?'<span class="small">Voicing in the score</span>'+names.map((n,i)=>'<button class="chip'+(i===S.scoreVoicing?' pinned':'')+'" type="button" data-sv="'+i+'">'+esc(n)+'</button>').join(''):'';
   host.classList.toggle('horiz',S.layout!=='rows');
   host.innerHTML=scoreHtml(res,full?'full':'mel',host.clientWidth,480,'score');
-  $('scoreNote').textContent=(full?'Top staff is your melody. The piano staves show the chosen voicing on the beat where each chord starts, and the keyboard under them shows the same notes with suggested fingers (1 is the thumb). ':'')+(sc.oct?'Melody written '+Math.abs(sc.oct)+' octave'+(Math.abs(sc.oct)>1?'s ':' ')+(sc.oct>0?'up':'down')+' so the chords have room underneath. ':'')+'The first note is treated as beat 1.';
+  const showNow=full&&S.layout!=='rows'&&res.segs.length>0;
+  $('scoreNow').hidden=!showNow;
+  if(showNow){if(nowIdx>=sc.chords.length)nowIdx=0;$('scoreNow').innerHTML=nowHtml(res,nowIdx);}
+  $('scoreNote').textContent=(full?'Top staff is your melody. The piano staves show the chosen voicing on the beat where each chord starts, and the keyboard '+(S.layout!=='rows'?'below shows the chord being played, switching half a beat early so you can see it coming':'under them shows the same notes')+', with suggested fingers (1 is the thumb). ':'')+(sc.oct?'Melody written '+Math.abs(sc.oct)+' octave'+(Math.abs(sc.oct)>1?'s ':' ')+(sc.oct>0?'up':'down')+' so the chords have room underneath. ':'')+'The first note is treated as beat 1.';
 }
 function renderPlayView(){
   if($('playView').hidden)return;
   const body=$('pvBody');
   $('pvStale').hidden=!stale;
-  if(!R||!R.segs.length){body.innerHTML='<p class="empty">No melody yet. Go back and play, sing or load one.</p>';$('pvVoicing').innerHTML='';$('pvTitle').textContent='Play view';return;}
+  if(!R||!R.segs.length){$('pvNow').hidden=true;body.innerHTML='<p class="empty">No melody yet. Go back and play, sing or load one.</p>';$('pvVoicing').innerHTML='';$('pvTitle').textContent='Play view';return;}
   const names=R.segs[0].voicings.map(v=>v.name);
   if(S.scoreVoicing>=names.length)S.scoreVoicing=0;
   $('pvVoicing').innerHTML=names.map((n,i)=>'<button class="chip'+(i===S.scoreVoicing?' pinned':'')+'" type="button" data-sv="'+i+'">'+esc(n)+'</button>').join('');
   $('pvTitle').textContent=(S.demo?S.demo+' · ':'')+R.key.label+(R.score?' · '+(+S.bpm||R.score.bpm)+' BPM':'');
   body.classList.toggle('horiz',!!R.score&&S.layout!=='rows');
+  const pvNow=!!R.score&&S.layout!=='rows';
+  $('pvNow').hidden=!pvNow;
+  if(pvNow){if(nowIdx>=R.score.chords.length)nowIdx=0;$('pvNow').innerHTML=nowHtml(R,nowIdx);}
   if(R.score){body.innerHTML=scoreHtml(R,'lead',body.clientWidth,300,'pv');return;}
   const vs=R.segs.map(sg=>sg.voicings[S.scoreVoicing]),[lo,hi]=range(vs);
   body.innerHTML='<div class="cards big">'+R.segs.map((sg,i)=>'<article class="card" data-seg="'+i+'"><div class="head"><div class="sym">'+esc(sg.symbol)+'</div><div class="rn">'+(i+1)+' · '+esc(sg.roman)+'</div></div>'+
@@ -1595,6 +1623,8 @@ function tick(){
         const miss=want-host.scrollLeft;
         svgs[sys].style.transform=Math.abs(miss)>1.5?'translateX('+(-miss)+'px)':'';
       }else if(svgs[sys].style.transform)svgs[sys].style.transform='';
+      let ni=0;anim.chords.forEach((c,i)=>{if(c.start<=t+2)ni=i;});   /* 2 sixteenths = half a beat ahead */
+      if(ni!==anim.now){anim.now=ni;setNow(ni);}
       const ci=anim.chords.findIndex(c=>t>=c.start&&t<c.start+c.dur);
       if(ci!==anim.chord){
         anim.chord=ci;
@@ -1641,7 +1671,7 @@ function playAll(){
       sc.mel.forEach(n=>toneNow(a,n.midi,.06+n.start*spu,Math.max(.4,n.dur*spu*1.4),.8,bus));
       sc.chords.forEach(c=>{const sg=res.segs[c.seg],v=sg.voicings[Math.min(S.scoreVoicing,sg.voicings.length-1)];
         v.lh.concat(v.rh).filter(m=>!(m===v.T&&!sg.shift)).forEach(m=>toneNow(a,m,.06+c.start*spu,Math.max(.7,c.dur*spu*1.25),.38,bus));});
-      anim={t0:a.currentTime+.06,spu,total:sc.total,chords:sc.chords,sys:-1,chord:-1,raf:0};
+      anim={t0:a.currentTime+.06,spu,total:sc.total,chords:sc.chords,sys:-1,chord:-1,now:-1,raf:0};
       tick();
     };
     if(a.state==='running')go();else a.resume().then(go).catch(()=>{});
@@ -1776,6 +1806,7 @@ function init(){
   $('cleanBtn').onclick=cleanUp;
   $('pvRefresh').onclick=()=>{stopAll();update();};
   $('pvVoicing').onclick=e=>{const b=e.target.closest('[data-sv]');if(b){S.scoreVoicing=+b.dataset.sv;stopAll();renderPlayView();}};
+  ['scoreNow','pvNow'].forEach(id=>{$(id).onclick=e=>{const p=e.target.closest('[data-play]');if(p&&R){audio();playVoicing(R.segs[+p.dataset.play.split(':')[1]].voicings[S.scoreVoicing]);}};});
   $('pvBody').onclick=e=>{const p=e.target.closest('[data-play]');if(p&&R){audio();playVoicing(R.segs[+p.dataset.play.split(':')[1]].voicings[S.scoreVoicing]);}};
   const setInput=m=>{S.input=m;S.pins={};stopAll();save();renderControls();if(m==='score'&&S.demo===DEMOS.ode.name){loadDemo('jingle');return;}update();};
   $('inFree').onclick=()=>setInput('free');
