@@ -234,6 +234,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
         <select id="everySel"><option value="bar">Every bar</option><option value="half">Twice a bar</option><option value="beat">Every beat</option></select>
       </label>
     </div>
+    <div class="row" id="scoreGenreChips" role="group" aria-label="Genre"></div>
     <div class="row" id="scoreVoicingChips" role="group" aria-label="Voicing shown in the score"></div>
     <div id="score"></div>
     <p class="small" id="scoreNote"></p>
@@ -1522,6 +1523,8 @@ function renderControls(){
   $('stratChips').hidden=S.mode!=='strategy';
   $('harmonyWrap').hidden=S.mode!=='strategy';
   $('genreChips').innerHTML=Object.keys(GENRES).map(id=>'<button class="btn" type="button" data-genre="'+id+'" aria-pressed="'+(S.genre===id)+'">'+GENRES[id].name+'</button>').join('');
+  $('scoreGenreChips').innerHTML='<span class="small">Genre</span>'+Object.keys(GENRES).map(id=>'<button class="chip'+(S.mode==='genre'&&S.genre===id?' pinned':'')+'" type="button" data-genre="'+id+'" aria-pressed="'+(S.mode==='genre'&&S.genre===id)+'">'+GENRES[id].name+'</button>').join('')+
+    (S.mode==='strategy'?'<span class="small">Using your own voicing strategies. Pick a genre to switch back.</span>':'');
   $('stratChips').innerHTML=Object.keys(STRATEGIES).map(id=>'<button class="btn" type="button" data-strat="'+id+'" aria-pressed="'+S.strategies.includes(id)+'">'+STRATEGIES[id].name+'</button>').join('');
   $('harmonySel').value=S.harmony;$('segSel').value=S.seg;$('keySel').value=S.keySel;$('monitor').checked=S.monitor;
   $('captureBtn').setAttribute('aria-pressed',S.capture);$('captureBtn').textContent=S.capture?'Capturing':'Paused';
@@ -1733,6 +1736,7 @@ function init(){
   $('modeGenre').onclick=()=>{S.mode='genre';changed();};
   $('modeStrategy').onclick=()=>{S.mode='strategy';changed();};
   $('genreChips').onclick=e=>{const b=e.target.closest('[data-genre]');if(b){S.genre=b.dataset.genre;changed();}};
+  $('scoreGenreChips').onclick=e=>{const b=e.target.closest('[data-genre]');if(b){S.mode='genre';S.genre=b.dataset.genre;S.scoreVoicing=0;stopAll();changed();}};
   $('stratChips').onclick=e=>{
     const b=e.target.closest('[data-strat]');if(!b)return;
     const id=b.dataset.strat,i=S.strategies.indexOf(id);
