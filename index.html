@@ -198,6 +198,8 @@ h2.tview{font-size:1.5rem}
 .tcoach li{margin-bottom:4px}
 .tcoach p+h3,.tcoach ol+h3{margin-top:12px}
 #tJump{max-width:min(46vw,300px)}
+.ttempo{flex-wrap:nowrap;gap:6px}
+.ttempo input{width:130px;accent-color:var(--accent);min-height:0}
 #tSheet{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px}
 #tSheet svg{display:block;width:100%;height:auto}
 .tsel{fill:transparent;cursor:pointer}
@@ -457,6 +459,7 @@ h2.tview{font-size:1.5rem}
       <button class="btn" id="tMel" type="button">With the melody</button>
       <button class="btn" id="tRun" type="button">Play through</button>
       <button class="btn" id="tPeek" type="button">Peek</button>
+      <label class="row small ttempo">Tempo <span aria-hidden="true">slower</span><input type="range" id="tTempo" min="0.5" max="2.5" step="0.05" value="1" aria-label="Tempo, slower to faster"><span aria-hidden="true">faster</span></label>
     </div>
     <div id="tSheet"></div>
     <div id="tCard"></div>
@@ -2426,19 +2429,21 @@ async function askClaude(){
 
 /* ---------- teaching mode: pick what to practise, step through it, hide what you want to memorise ---------- */
 const TKEY='chordVoicer.teach';
-const TM={view:'sheet',rec:false,open:false,topic:'inv',drill:'each',src:'song',size:'3',hand:'rh',order:'seq',hide:{},got:{},i:0,steps:[],peek:false,run:null,plan:null,lo:48,hi:71};
-try{const s=JSON.parse(localStorage.getItem(TKEY)||'null');if(s)['topic','drill','src','size','hand','order','hide','got','view'].forEach(k=>{if(s[k]!=null)TM[k]=s[k];});}catch(e){}
+const TM={speed:1,view:'sheet',rec:false,open:false,topic:'inv',drill:'each',src:'song',size:'3',hand:'rh',order:'seq',hide:{},got:{},i:0,steps:[],peek:false,run:null,plan:null,lo:48,hi:71};
+try{const s=JSON.parse(localStorage.getItem(TKEY)||'null');if(s)['topic','drill','src','size','hand','order','hide','got','view','speed'].forEach(k=>{if(s[k]!=null)TM[k]=s[k];});}catch(e){}
 if(!TEACH[TM.topic])TM.topic='inv';
 if(!TEACH[TM.topic].drills[TM.drill])TM.drill='each';
 if(!['song','maj12','min12','dom12'].includes(TM.src))TM.src='song';
 if(typeof TM.hide!=='object'||!TM.hide)TM.hide={};
 if(typeof TM.got!=='object'||!TM.got)TM.got={};
-function teachSave(){try{localStorage.setItem(TKEY,JSON.stringify({view:TM.view,topic:TM.topic,drill:TM.drill,src:TM.src,size:TM.size,hand:TM.hand,order:TM.order,hide:TM.hide,got:TM.got}));}catch(e){}}
+function teachSave(){try{localStorage.setItem(TKEY,JSON.stringify({speed:TM.speed,view:TM.view,topic:TM.topic,drill:TM.drill,src:TM.src,size:TM.size,hand:TM.hand,order:TM.order,hide:TM.hide,got:TM.got}));}catch(e){}}
 const TSHOW={name:'Chord name',kb:'Key placements',fing:'Finger numbers',staff:'Sheet music',notes:'Note names'};
 const TPRESET={learn:['Learn: show everything',[]],recall:['Recall: name only',['kb','fing','staff','notes']],read:['Read: sheet music only',['name','kb','fing','notes']],ear:['By ear: hide it all',['name','kb','fing','staff','notes']]};
 const tCur=()=>TM.steps[TM.i]||null;
 const tHid=k=>!!TM.hide[k]&&!TM.peek;
-function teachStop(){if(TM.run){clearInterval(TM.run);TM.run=null;}}
+function teachStop(){if(TM.run){clearTimeout(TM.run);TM.run=null;}}
+/* the tempo slider is relative, never a BPM number: 1 is the normal pace, 2 is twice as fast */
+const tSpeed=()=>clamp(+TM.speed||1,.5,2.5);
 function teachBuild(keep){
   teachStop();
   if(TM.drill==='top'&&TM.src!=='song')TM.drill='each';
@@ -2643,16 +2648,17 @@ function teachHear(broken){
   const st=tCur();if(!st)return;audio();
   if(!broken){playVoicing(st.v);return;}
   const ns=st.v.lh.concat(st.v.rh).sort((a,b)=>a-b);
-  ns.forEach((m,i)=>tone(m,i*.26,1.5,.62));
-  ns.forEach(m=>tone(m,ns.length*.26+.2,2.4,.45));
+  const gap=.26/tSpeed();
+  ns.forEach((m,i)=>tone(m,i*gap,1.5,.62));
+  ns.forEach(m=>tone(m,ns.length*gap+.2,2.4,.45));
 }
 /* the chord with the melody notes it sits under, in their written rhythm when there is one */
 function teachMel(){
   const st=tCur(),sg=st&&st.seg!=null&&R?R.segs[st.seg]:null;if(!sg)return;
   audio();
   let ev,t=0;
-  if(R.score&&R.score.chords[st.seg]){const spu=15/playBpm(R.score),c0=R.score.chords[st.seg].start;ev=sg.notes.map(m=>({m:m.midi,t:Math.max(0,m.start-c0)*spu,d:m.dur*spu}));}
-  else ev=sg.notes.map(m=>{const d=Math.min(m.w||500,1500)/1000,e={m:m.midi,t,d};t+=d;return e;});
+  if(R.score&&R.score.chords[st.seg]){const spu=15/playBpm(R.score)/tSpeed(),c0=R.score.chords[st.seg].start;ev=sg.notes.map(m=>({m:m.midi,t:Math.max(0,m.start-c0)*spu,d:m.dur*spu}));}
+  else ev=sg.notes.map(m=>{const d=Math.min(m.w||500,1500)/1000/tSpeed(),e={m:m.midi,t,d};t+=d;return e;});
   const end=ev.length?ev[ev.length-1].t+ev[ev.length-1].d:2,up=TM.drill==='top'?(sg.shift||0):0;
   st.v.lh.concat(st.v.rh).filter(m=>m!==st.v.T).forEach(m=>tone(m,0,Math.max(1.6,end*1.1),.4));
   ev.forEach(e=>tone(e.m+up,e.t,Math.max(.35,e.d*1.3),.8));
@@ -2661,10 +2667,12 @@ function teachRun(){
   if(TM.run){teachStop();teachRender();return;}
   if(!tCur())return;
   audio();playVoicing(tCur().v);
-  TM.run=setInterval(()=>{
+  /* each wait reads the slider afresh, so moving it changes the pace while this is playing */
+  const next=()=>{
     if(TM.i>=TM.steps.length-1){teachStop();teachRender();return;}
-    TM.i++;TM.peek=false;teachRender();playVoicing(tCur().v);
-  },S.learn?3000:2000);
+    TM.i++;TM.peek=false;TM.run=setTimeout(next,2000/tSpeed());teachRender();playVoicing(tCur().v);
+  };
+  TM.run=setTimeout(next,2000/tSpeed());
   teachRender();
 }
 function teachOpen(on){
@@ -2726,6 +2734,8 @@ function teachInit(){
   };
   $('tKeySel').innerHTML=$('keySel').innerHTML;
   $('tKeySel').onchange=e=>{S.keySel=e.target.value;$('keySel').value=S.keySel;S.demoKey=false;S.pins={};stopAll();update();};
+  $('tTempo').value=tSpeed();
+  $('tTempo').oninput=e=>{TM.speed=+e.target.value;teachSave();};
   $('tRec').onclick=teachRec;
   $('tUndo').onclick=()=>{if(TM.rec){S.notes.pop();melodyChanged();}};
   $('tMelPlay').onclick=playMelody;
