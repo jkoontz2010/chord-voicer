@@ -403,8 +403,10 @@ h2.tview{font-size:1.5rem}
       <label class="field" id="tSizeWrap">Chord size <select id="tSize"><option value="3">Triads</option><option value="7">Sevenths</option></select></label>
       <label class="field" id="tHandWrap">Hand <select id="tHand"><option value="rh">Right</option><option value="lh">Left</option><option value="both">Both</option></select></label>
       <label class="field" id="tOrderWrap">Order <select id="tOrder"><option value="seq">In order</option><option value="shuf">Shuffled</option></select></label>
+      <label class="field">Sound <select id="tInstSel"></select></label>
       <label class="btn filebtn" for="songFile">Load a song (MIDI file)</label>
     </div>
+    <p class="small" id="tInstStatus" hidden></p>
     <p class="small" id="tAbout"></p>
   </section>
   <section class="panel" id="tStepPanel" aria-label="Exercise">
@@ -1381,10 +1383,11 @@ if(typeof module!=='undefined')module.exports={TEACH,teachSteps,invNotes,chordPa
 /* ---------- app ---------- */
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S={notes:[],held:new Map(),capture:true,demo:false,mode:'genre',genre:'jazz',strategies:['rootless','shell'],harmony:'sevenths',keySel:'auto',seg:'t4',pins:{},monitor:true,base:60,input:'free',grid:2,bpm:'',every:'bar',scoreVoicing:0,qscale:1,inst:'piano',meter:0,layout:'h',learn:false,song:null,chordSrc:'song'};
+const S={notes:[],held:new Map(),capture:true,demo:false,mode:'genre',genre:'jazz',strategies:['rootless','shell'],harmony:'sevenths',keySel:'auto',seg:'t4',pins:{},monitor:true,base:60,input:'free',grid:2,bpm:'',every:'bar',scoreVoicing:0,qscale:1,inst:'salamander',meter:0,layout:'h',learn:false,song:null,chordSrc:'song'};
 let R=null, timer=null, playing=null, stale=false, lastMel=null, melTimers=[];
 
 try{const s=JSON.parse(localStorage.getItem('chordVoicer')||'null');if(s)['mode','genre','strategies','harmony','seg','monitor','input','meter','grid','every','qscale','inst','layout','learn','chordSrc'].forEach(k=>{if(s[k]!=null)S[k]=s[k];});}catch(e){}
+try{if(!localStorage.getItem('chordVoicer.snd2')){localStorage.setItem('chordVoicer.snd2','1');if(S.inst==='piano')S.inst='salamander';}}catch(e){}
 if(!GENRES[S.genre])S.genre='jazz';
 S.strategies=(Array.isArray(S.strategies)?S.strategies:[]).filter(id=>STRATEGIES[id]);
 if(!S.strategies.length)S.strategies=['rootless'];
@@ -1403,6 +1406,7 @@ function unlock(){
   if(ac&&ac.state==='running')return;
   const a=audio();if(!a)return;
   try{const s=a.createBufferSource();s.buffer=a.createBuffer(1,1,22050);s.connect(a.destination);s.start(0);}catch(e){}
+  if(SAMPLED[S.inst]&&!BANK[S.inst])loadBank(S.inst);
 }
 ['touchend','pointerup','click','keydown'].forEach(ev=>document.addEventListener(ev,unlock,true));
 function tone(midi,when,dur,vel){
@@ -1420,10 +1424,16 @@ const SAMPLED={
   musyng:{name:'Grand piano, MusyngKite',url:GLEITZ+'MusyngKite/acoustic_grand_piano-mp3.js',gain:1.3},
   fatboy:{name:'Grand piano, FatBoy',url:GLEITZ+'FatBoy/acoustic_grand_piano-mp3.js',gain:1.3},
   bright:{name:'Bright piano, FluidR3',url:GLEITZ+'FluidR3_GM/bright_acoustic_piano-mp3.js',gain:1.3},
-  rhodes:{name:'Electric piano, FluidR3',url:GLEITZ+'FluidR3_GM/electric_piano_1-mp3.js',gain:1.3}
+  rhodes:{name:'Electric piano, FluidR3',url:GLEITZ+'FluidR3_GM/electric_piano_1-mp3.js',gain:1.3},
+  dx:{name:'Electric piano 2, FluidR3',url:GLEITZ+'FluidR3_GM/electric_piano_2-mp3.js',gain:1.3},
+  vibes:{name:'Vibraphone, FluidR3',url:GLEITZ+'FluidR3_GM/vibraphone-mp3.js',gain:1.3},
+  nylon:{name:'Nylon guitar, FluidR3',url:GLEITZ+'FluidR3_GM/acoustic_guitar_nylon-mp3.js',gain:1.3},
+  harp:{name:'Harp, FluidR3',url:GLEITZ+'FluidR3_GM/orchestral_harp-mp3.js',gain:1.3},
+  strings:{name:'Strings, FluidR3',url:GLEITZ+'FluidR3_GM/string_ensemble_1-mp3.js',gain:1.2},
+  organ:{name:'Church organ, FluidR3',url:GLEITZ+'FluidR3_GM/church_organ-mp3.js',gain:1.1}
 };
 const BANK={};
-function instStatus(t,warn){const el=$('instStatus');el.textContent=t||'';el.hidden=!t;el.classList.toggle('warn',!!warn);}
+function instStatus(t,warn){['instStatus','tInstStatus'].forEach(id=>{const el=$(id);el.textContent=t||'';el.hidden=!t;el.classList.toggle('warn',!!warn);});}
 async function cachedFetch(url){
   let cache=null;
   try{   /* the cache is a bonus: if the browser stalls or refuses it, carry on without */
@@ -2651,15 +2661,18 @@ function init(){
   $('octDown').onclick=()=>{if(S.base>24){S.base-=12;buildKb();}};
   $('octUp').onclick=()=>{if(S.base<84){S.base+=12;buildKb();}};
   $('monitor').onchange=e=>{S.monitor=e.target.checked;save();};
-  $('instSel').innerHTML='<optgroup label="Sampled pianos (download on first use)">'+Object.keys(SAMPLED).map(k=>'<option value="'+k+'">'+SAMPLED[k].name+'</option>').join('')+'</optgroup>'+
-    '<optgroup label="Built in">'+Object.keys(INSTRUMENTS).map(k=>'<option value="'+k+'">'+INSTRUMENTS[k]+'</option>').join('')+'</optgroup>';
-  if(!INSTRUMENTS[S.inst]&&!SAMPLED[S.inst])S.inst='piano';
-  $('instSel').value=S.inst;
-  $('instSel').onchange=e=>{
-    S.inst=e.target.value;save();stopAll();instStatus('');
-    const demo=()=>{if(S.inst===e.target.value)[60,64,67,72].forEach((m,i)=>tone(m,i*.16,1.6,.65));};
-    if(SAMPLED[S.inst]){audio();const p=loadBank(S.inst);if(p)p.then(demo);else demo();}else demo();
-  };
+  const instOpts='<optgroup label="Sampled instruments (download on first use)">'+Object.keys(SAMPLED).map(k=>'<option value="'+k+'">'+SAMPLED[k].name+'</option>').join('')+'</optgroup>'+
+    '<optgroup label="Built in, no download">'+Object.keys(INSTRUMENTS).map(k=>'<option value="'+k+'">'+INSTRUMENTS[k]+'</option>').join('')+'</optgroup>';
+  if(!INSTRUMENTS[S.inst]&&!SAMPLED[S.inst])S.inst='salamander';
+  ['instSel','tInstSel'].forEach(id=>{
+    $(id).innerHTML=instOpts;$(id).value=S.inst;
+    $(id).onchange=e=>{
+      S.inst=e.target.value;save();stopAll();instStatus('');
+      ['instSel','tInstSel'].forEach(o=>{$(o).value=S.inst;});
+      const demo=()=>{if(S.inst===e.target.value)[60,64,67,72].forEach((m,i)=>tone(m,i*.16,1.6,.65));};
+      if(SAMPLED[S.inst]){audio();const p=loadBank(S.inst);if(p)p.then(demo);else demo();}else demo();
+    };
+  });
   $('captureBtn').onclick=()=>{S.capture=!S.capture;renderControls();};
   $('undoBtn').onclick=()=>{if(S.demo)return;S.notes.pop();S.pins={};melodyChanged();};
   $('clearBtn').onclick=()=>{S.notes=[];S.held.clear();dropDemo();S.pins={};stopAll();update();};
