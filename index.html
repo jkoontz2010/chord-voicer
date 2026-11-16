@@ -181,6 +181,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
         <button class="btn" id="octUp" type="button" aria-label="Shift keys up an octave">Octave +</button>
         <label class="row small"><input type="checkbox" id="monitor" checked> Play sound for keys</label>
         <label class="row small">Sound <select id="instSel"></select></label>
+        <span class="small" id="instStatus" hidden></span>
       </div>
       <div class="row">
         <button class="btn" id="captureBtn" type="button" aria-pressed="true">Capturing</button>
@@ -287,6 +288,8 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
     <p class="small">Tap a keyboard to hear it. Tap another chord name to swap the harmony for that spot.</p>
     <div class="cards" id="results"></div>
   </section>
+
+  <p class="small">Sampled pianos are recordings of real instruments: the Salamander Grand Piano by Alexander Holm, hosted by Tone.js, and the FluidR3, MusyngKite and FatBoy soundfonts, hosted by the midi-js-soundfonts project. This page downloads them straight from those hosts the first time you pick one.</p>
 
   <section class="panel" id="claudePanel" hidden aria-label="Ask Claude">
     <h2>Ask Claude for more voicings</h2>
@@ -935,6 +938,83 @@ function tone(midi,when,dur,vel){
 }
 /* ---------- instruments: all synthesized in the browser, no sample files ---------- */
 const INSTRUMENTS={piano:'Piano',epiano:'Electric piano',organ:'Organ',strings:'Strings',vibes:'Vibraphone',pluck:'Plucked',simple:'Simple tone'};
+/* ---------- sampled pianos: recordings pulled from public hosts on first use, then kept in this browser's cache ---------- */
+const GLEITZ='https://gleitz.github.io/midi-js-soundfonts/';
+const SAMPLED={
+  salamander:{name:'Grand piano, Salamander',base:'https://tonejs.github.io/audio/salamander/',gain:1.7},
+  fluid:{name:'Grand piano, FluidR3',url:GLEITZ+'FluidR3_GM/acoustic_grand_piano-mp3.js',gain:1.3},
+  musyng:{name:'Grand piano, MusyngKite',url:GLEITZ+'MusyngKite/acoustic_grand_piano-mp3.js',gain:1.3},
+  fatboy:{name:'Grand piano, FatBoy',url:GLEITZ+'FatBoy/acoustic_grand_piano-mp3.js',gain:1.3},
+  bright:{name:'Bright piano, FluidR3',url:GLEITZ+'FluidR3_GM/bright_acoustic_piano-mp3.js',gain:1.3},
+  rhodes:{name:'Electric piano, FluidR3',url:GLEITZ+'FluidR3_GM/electric_piano_1-mp3.js',gain:1.3}
+};
+const BANK={};
+function instStatus(t,warn){const el=$('instStatus');el.textContent=t||'';el.hidden=!t;el.classList.toggle('warn',!!warn);}
+async function cachedFetch(url){
+  let cache=null;
+  try{   /* the cache is a bonus: if the browser stalls or refuses it, carry on without */
+    cache=await Promise.race([caches.open('chord-voicer-samples-v1'),new Promise((_,rej)=>setTimeout(()=>rej(new Error('slow')),1500))]);
+    const hit=await cache.match(url);if(hit)return hit;
+  }catch(e){cache=null;}
+  const r=await fetch(url,{mode:'cors'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  if(cache){try{await cache.put(url,r.clone());}catch(e){}}
+  return r;
+}
+/* keep memory down on phones: one channel, at most six seconds per note */
+function trimMono(a,ab){
+  const n=Math.min(ab.length,Math.floor(ab.sampleRate*6)),out=a.createBuffer(1,n,ab.sampleRate),d=out.getChannelData(0);
+  const c0=ab.getChannelData(0),c1=ab.numberOfChannels>1?ab.getChannelData(1):null,fade=Math.min(n,Math.floor(ab.sampleRate*.3)),cut=ab.length>n;
+  for(let i=0;i<n;i++){let v=c1?(c0[i]+c1[i])/2:c0[i];if(cut&&i>n-fade)v*=(n-i)/fade;d[i]=v;}
+  return out;
+}
+const decodeAudio=(a,buf)=>new Promise((res,rej)=>{const p=a.decodeAudioData(buf,res,rej);if(p&&p.catch)p.catch(rej);});
+/* every third note is enough; the notes between are the nearest recording played slightly faster or slower */
+async function loadBank(id){
+  const a=audio(),def=SAMPLED[id];
+  if(!a||!def)return;
+  if(BANK[id]&&BANK[id].state!=='failed')return BANK[id].done;
+  const bank=BANK[id]={state:'loading',buf:{},keys:[]};
+  const want=[];for(let m=21;m<=108;m+=3)want.push(m);
+  want.sort((x,y)=>Math.abs(x-62)-Math.abs(y-62));   /* middle of the keyboard first, so it is playable early */
+  const add=(m,ab)=>{
+    bank.buf[m]=trimMono(a,ab);bank.keys=Object.keys(bank.buf).map(Number).sort((x,y)=>x-y);
+    if(S.inst===id)instStatus('Loading '+def.name+'… '+bank.keys.length+' of '+want.length);
+  };
+  bank.done=(async()=>{
+    try{
+      if(S.inst===id)instStatus('Loading '+def.name+'…');
+      if(def.base){
+        const nm=m=>({9:'A',0:'C',3:'Ds',6:'Fs'})[m%12]+(Math.floor(m/12)-1);
+        let i=0;
+        const worker=async()=>{while(i<want.length){const m=want[i++];try{const r=await cachedFetch(def.base+nm(m)+'.mp3');add(m,await decodeAudio(a,await r.arrayBuffer()));}catch(e){}}};
+        await Promise.all([worker(),worker(),worker(),worker()]);
+      }else{
+        const txt=await (await cachedFetch(def.url)).text(),found={},re=/"([A-G]b?-?\d)":\s*"data:audio\/[a-z0-9]+;base64,([^"]+)"/g;
+        let mt;while((mt=re.exec(txt)))found[mt[1]]=mt[2];
+        const FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+        for(const m of want){
+          const b64=found[FL[m%12]+(Math.floor(m/12)-1)];
+          if(!b64)continue;
+          try{const bin=atob(b64),u=new Uint8Array(bin.length);for(let k=0;k<bin.length;k++)u[k]=bin.charCodeAt(k);add(m,await decodeAudio(a,u.buffer));}catch(e){}
+        }
+      }
+    }catch(e){}
+    bank.state=bank.keys.length?'ready':'failed';
+    if(S.inst===id)instStatus(bank.state==='ready'?def.name+' loaded. Recordings are kept in this browser, so next time is instant.'
+      :'Could not download '+def.name+'. Sampled pianos need the hosted site and an internet connection; they are blocked inside Claude. Using the built-in piano for now.',bank.state!=='ready');
+  })();
+  return bank.done;
+}
+function playSample(a,bank,def,midi,t,dur,v,out){
+  let k=bank.keys[0];
+  for(const c of bank.keys)if(Math.abs(c-midi)<Math.abs(k-midi))k=c;
+  const src=a.createBufferSource(),g=a.createGain();
+  src.buffer=bank.buf[k];src.playbackRate.value=Math.pow(2,(midi-k)/12);
+  g.gain.setValueAtTime(v*(def.gain||1),t);
+  g.gain.setTargetAtTime(0,t+dur,.16);          /* damper comes down when the note ends */
+  src.connect(g);g.connect(out);src.start(t);src.stop(t+dur+1.3);
+}
 let fx=null;
 function master(a){
   if(fx&&fx.ctx===a)return fx.inp;
@@ -955,6 +1035,11 @@ function toneNow(a,midi,when,dur,vel,dest){
   const out=dest||master(a);master(a);
   const t=a.currentTime+(when||0),f=440*Math.pow(2,(midi-69)/12),v=vel||.6;
   dur=dur||1.4;
+  if(SAMPLED[S.inst]){
+    const bank=BANK[S.inst];
+    if(bank&&bank.keys.length){playSample(a,bank,SAMPLED[S.inst],midi,t,dur,v,out);return;}
+    if(!bank)loadBank(S.inst);                  /* until it arrives, fall through to the built-in piano */
+  }
   const g=a.createGain();g.gain.setValueAtTime(0.0001,t);
   let end=t+dur+.1,tail=g;
   const osc=(type,freq,amp,cents,to)=>{
@@ -1632,9 +1717,15 @@ function init(){
   $('octDown').onclick=()=>{if(S.base>24){S.base-=12;buildKb();}};
   $('octUp').onclick=()=>{if(S.base<84){S.base+=12;buildKb();}};
   $('monitor').onchange=e=>{S.monitor=e.target.checked;save();};
-  $('instSel').innerHTML=Object.keys(INSTRUMENTS).map(k=>'<option value="'+k+'">'+INSTRUMENTS[k]+'</option>').join('');
-  $('instSel').value=INSTRUMENTS[S.inst]?S.inst:'piano';
-  $('instSel').onchange=e=>{S.inst=e.target.value;save();stopAll();[60,64,67,72].forEach((m,i)=>tone(m,i*.16,1.6,.65));};
+  $('instSel').innerHTML='<optgroup label="Sampled pianos (download on first use)">'+Object.keys(SAMPLED).map(k=>'<option value="'+k+'">'+SAMPLED[k].name+'</option>').join('')+'</optgroup>'+
+    '<optgroup label="Built in">'+Object.keys(INSTRUMENTS).map(k=>'<option value="'+k+'">'+INSTRUMENTS[k]+'</option>').join('')+'</optgroup>';
+  if(!INSTRUMENTS[S.inst]&&!SAMPLED[S.inst])S.inst='piano';
+  $('instSel').value=S.inst;
+  $('instSel').onchange=e=>{
+    S.inst=e.target.value;save();stopAll();instStatus('');
+    const demo=()=>{if(S.inst===e.target.value)[60,64,67,72].forEach((m,i)=>tone(m,i*.16,1.6,.65));};
+    if(SAMPLED[S.inst]){audio();const p=loadBank(S.inst);if(p)p.then(demo);else demo();}else demo();
+  };
   $('captureBtn').onclick=()=>{S.capture=!S.capture;renderControls();};
   $('undoBtn').onclick=()=>{if(S.demo)return;S.notes.pop();S.pins={};melodyChanged();};
   $('clearBtn').onclick=()=>{S.notes=[];S.held.clear();dropDemo();S.pins={};stopAll();update();};
