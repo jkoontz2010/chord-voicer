@@ -77,7 +77,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
 .hn{font:500 10px var(--mono);fill:var(--c)}
 .hl{font:700 8px var(--body);fill:var(--c)}
 #score{display:flex;flex-direction:column;gap:22px}
-#score.horiz,#pvBody.horiz{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+#score.horiz,#pvBody.horiz{display:block;overflow-x:auto;padding-bottom:6px}
 #score svg{display:block;width:100%;height:auto}
 .sl{stroke:var(--ink);stroke-width:.7;opacity:.5}
 .bl{stroke:var(--ink);stroke-width:1}
@@ -1564,13 +1564,11 @@ function follow(el,block){
 }
 function userTouched(){if(playing)autoScroll=false;}
 ['wheel','touchstart','pointerdown','keydown'].forEach(ev=>window.addEventListener(ev,userTouched,{capture:true,passive:true}));
-window.addEventListener('scroll',e=>{
-  /* our own sideways scrolling lands exactly where we put it; anything else is the person scrolling */
-  if(anim&&e.target===anim.host&&Math.abs(e.target.scrollLeft-anim.want)<3)return;
-  if(performance.now()>progUntil)userTouched();
-},{capture:true,passive:true});
+/* Scroll events are not used to detect the person: phones fire them late and for our own scrolling too.
+   Touch, pointer, wheel and key events above cover every way of taking over. */
 function clearCursor(){
   document.querySelectorAll('.cur').forEach(c=>{c.style.display='none';});
+  document.querySelectorAll('svg.sys').forEach(v=>{if(v.style.transform)v.style.transform='';});
   document.querySelectorAll('.kbhl.on').forEach(c=>c.classList.remove('on'));
   document.querySelectorAll('.hd.play').forEach(c=>c.classList.remove('play'));
 }
@@ -1583,7 +1581,7 @@ function tick(){
     if(lay&&svgs.length){
       const m=Math.floor(t/lay.M),sys=Math.min(svgs.length-1,Math.floor(m/lay.per));
       if(sys!==anim.sys){
-        clearCursor();anim.sys=sys;anim.chord=-1;follow(svgs[sys],lay.horiz?'nearest':'start');
+        clearCursor();anim.sys=sys;anim.chord=-1;follow(lay.horiz?host:svgs[sys],lay.horiz?'center':'start');
         anim.heads=Array.from(svgs[sys].querySelectorAll('.hd')).map(el=>({el,s:+el.dataset.s,e:+el.dataset.e,on:false}));
       }
       anim.heads.forEach(h=>{const on=t>=h.s&&t<h.e;if(on!==h.on){h.on=on;h.el.classList.toggle('play',on);}});
@@ -1592,8 +1590,11 @@ function tick(){
       if(cur){cur.setAttribute('x',cx-1.5);cur.style.display='block';}
       if(lay.horiz&&autoScroll){   /* slide the long line under a playhead held about a third of the way across */
         const want=Math.max(0,Math.min(host.scrollWidth-host.clientWidth,cx*lay.zoom-host.clientWidth*.32));
-        if(Math.abs(host.scrollLeft-want)>.5){anim.host=host;anim.want=want;host.scrollLeft=want;anim.want=host.scrollLeft;}
-      }
+        if(Math.abs(host.scrollLeft-want)>.5)host.scrollLeft=want;
+        /* some phone browsers ignore scrollLeft set from script: slide the drawing itself the rest of the way */
+        const miss=want-host.scrollLeft;
+        svgs[sys].style.transform=Math.abs(miss)>1.5?'translateX('+(-miss)+'px)':'';
+      }else if(svgs[sys].style.transform)svgs[sys].style.transform='';
       const ci=anim.chords.findIndex(c=>t>=c.start&&t<c.start+c.dur);
       if(ci!==anim.chord){
         anim.chord=ci;
