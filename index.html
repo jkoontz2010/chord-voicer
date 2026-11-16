@@ -212,6 +212,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
     <div class="row voice">
       <label class="btn filebtn" for="songFile">Load a song (MIDI file)</label>
       <input type="file" id="songFile" class="vh" accept=".mid,.midi,.kar,.rmi,audio/midi,audio/x-midi,audio/mid">
+      <label class="field" id="savedWrap" hidden>Your songs <select id="savedSel"></select></label>
       <label class="field" id="partWrap" hidden>Melody part <select id="partSel"></select></label>
       <label class="field" id="srcWrap" hidden>Chords <select id="srcSel"><option value="song">From the song</option><option value="new">New, from the melody</option></select></label>
       <p class="status" id="songStatus" style="flex:1;min-width:220px">Pick a .mid file of a song. The app finds the melody, writes it out, and voices the chords the song plays so you can play along.</p>
@@ -963,7 +964,7 @@ function parseMidi(buf){
         else if(type===0x58&&len>=2&&!song.sig)song.sig=[d[p],1<<d[p+1]];
         p+=len;continue;
       }
-      if(b===0xf0||b===0xf7){p++;p+=vl();continue;}
+      if(b===0xf0||b===0xf7){p++;const len=vl();p+=len;continue;}
       if(b&0x80){st=b;p++;}
       const cmd=st&0xf0,ch=st&15;
       if(!cmd){p++;continue;}
@@ -978,7 +979,7 @@ function parseMidi(buf){
     chs.forEach(ch=>{
       const notes=byCh[ch].sort((x,y)=>x.on-y.on||y.midi-x.midi).map(n=>({midi:n.midi,on:n.on,off:n.off}));
       const drum=ch===9,fam=drum?'Drums':GM_FAM[(prog[ch]||0)>>3];
-      song.parts.push({name:name?(chs.length>1?name+' ('+fam+')':name):fam,fam,drum,prog:prog[ch]||0,notes});
+      song.parts.push({name:name&&chs.length<2?name:fam,fam,drum,ch,prog:prog[ch]||0,notes});
       notes.forEach(n=>{if(n.off>song.end)song.end=n.off;});
     });
   }
@@ -1004,13 +1005,14 @@ function rateParts(song){
       if(i)leap+=Math.abs(x.midi-ns[i-1].midi);
     });
     const mono=1-poly/n,mean=sum/n,step=n>1?leap/(n-1):0;
-    let s=2*mono+1.5*clamp((mean-48)/24,0,1)+act.size/bars;
+    let s=3*mono+1.5*clamp((mean-48)/24,0,1)+act.size/bars;
     if(mean>90)s-=1;
     if(n<12)s-=3;
     if(pcs.size<5)s-=1;
     s+=step<=4?.5:step>7?-.5:0;
-    if(/melod|vocal|vox|voice|lead|sing|solo|tune|verse/i.test(pt.name))s+=3;
-    if(/bass|drum|perc|pad|chord|comp|rhythm|harmon|backing|strings/i.test(pt.name))s-=2;
+    if(/melod|vocal|vox|lead voc|sing|tune|^voice$|^lead$/i.test(pt.name)&&!/back|bgv|harm/i.test(pt.name))s+=3;
+    if(/bass|drum|perc|pad|chord|comp|rhythm|harmon|backing|strings|ooh|aah|choir/i.test(pt.name))s-=2;
+    if(pt.ch===3)s+=.6;   /* song files made for karaoke usually keep the tune on channel 4 */
     if(pt.fam==='Bass')s-=2;
     pt.mono=mono;pt.score=s;
   });
@@ -1439,13 +1441,38 @@ function useSongPart(i,first){
   songStatus('Loaded '+sg.name+'. Melody: '+pt.name+', '+r.count+' notes, '+Math.round(60000/r.q)+' BPM, '+r.key.label+'. '+
     (r.alone?'This file has a single part, so the top line is the melody and the chords are read from all of its notes.':'If the melody looks wrong, pick another part under Melody part.'));
 }
+/* loaded songs are kept in this browser's own storage so they can be picked again; they are never sent anywhere */
+const SONGKEY='chordVoicer.songs';
+function savedSongs(){try{return JSON.parse(localStorage.getItem(SONGKEY)||'{}')||{};}catch(e){return {};}}
+function keepSong(name,u8){
+  let t='';for(let i=0;i<u8.length;i+=0x8000)t+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));
+  const all=savedSongs();all[name]=btoa(t);
+  try{localStorage.setItem(SONGKEY,JSON.stringify(all));return true;}catch(e){return false;}
+}
+function savedUi(){
+  const names=Object.keys(savedSongs()).sort();
+  $('savedWrap').hidden=!names.length;
+  $('savedSel').innerHTML='<option value="">Choose…</option>'+names.map(n=>'<option value="s:'+esc(n)+'">'+esc(n)+'</option>').join('')+'<option value="forget">Forget saved songs</option>';
+}
+function openSaved(v){
+  if(v==='forget'){try{localStorage.removeItem(SONGKEY);}catch(e){}savedUi();return;}
+  const name=v.slice(2),t=savedSongs()[name];if(!t)return;
+  const b=atob(t),u8=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u8[i]=b.charCodeAt(i);
+  loadSong(name,u8,false);
+}
 async function readSong(file){
   if(!file)return;
   songStatus('Reading '+file.name+'…');
+  let u8=null;
+  try{u8=new Uint8Array(await file.arrayBuffer());}catch(e){}
+  loadSong(file.name.replace(/\.[^.]+$/,'').slice(0,40),u8,true);
+}
+function loadSong(name,u8,keep){
   try{
-    const data=parseMidi(await file.arrayBuffer()),best=rateParts(data);
-    S.song={name:file.name.replace(/\.[^.]+$/,'').slice(0,40),data};
+    const data=parseMidi(u8),best=rateParts(data);
+    S.song={name,data};
     useSongPart(best,true);
+    if(keep){const ok=keepSong(name,u8);savedUi();songStatus($('songStatus').textContent+(ok?' Saved on this device under Your songs.':' This browser had no room to save it, so pick the file again next time.'));}
   }catch(err){
     const m=err&&err.message;
     if(S.song&&!S.song.harm)S.song=null;
@@ -2037,6 +2064,7 @@ function init(){
   $('micBtn').onclick=()=>{mic?stopMic():startMic();};
   $('voiceFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readRecording(f);};
   $('songFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)readSong(f);};
+  $('savedSel').onchange=e=>{const v=e.target.value;e.target.value='';if(v)openSaved(v);};savedUi();
   $('partSel').onchange=e=>{if(S.song)useSongPart(+e.target.value,false);};
   ['srcSel','srcSel2'].forEach(id=>{$(id).onchange=e=>{S.chordSrc=e.target.value;S.scoreVoicing=0;stopAll();changed();songUi();};});
   $('playAll').onclick=playAll;
