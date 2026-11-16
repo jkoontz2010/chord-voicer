@@ -201,6 +201,8 @@ h2.tview{font-size:1.5rem}
 #tSheet{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px}
 #tSheet svg{display:block;width:100%;height:auto}
 .tsel{fill:transparent;cursor:pointer}
+.tmini{cursor:pointer}
+.tmini .tdot{display:none}
 .tsel.on{fill:var(--accent);fill-opacity:.12}
 .tsl{font:500 8.5px var(--mono);fill:var(--muted)}
 .tsn{font:500 7px var(--mono);fill:var(--muted)}
@@ -2469,11 +2471,11 @@ function teachControls(){
   $('tSrcLine').textContent=song?(has?'Built from '+cur+' · '+R.key.label+' · '+n+' different chord'+(n===1?'':'s'):'No melody loaded yet.'):'Built from all twelve keys, going round the circle of fifths.';
 }
 /* the step's keyboard: every key can be tapped; placements and finger numbers can be hidden */
-function tKbSvg(v,lo,hi,show,fing){
+function tKbSvg(v,lo,hi,show,fing,attrs){
   const isB=n=>[1,3,6,8,10].includes(n%12),pos={},fg=show&&fing?fingering(v):{};
   let x=0;for(let n=lo;n<=hi;n++)if(!isB(n)){pos[n]=x;x+=10;}
   const hand=n=>!show?'':n===v.T?'mel':v.lh.includes(n)?'lh':v.rh.includes(n)?'rh':'';
-  let s='<svg class="tkb" style="max-width:'+Math.round(x*3.6)+'px;min-width:'+Math.round(x*1.7)+'px" viewBox="0 0 '+x+' '+KBH+'" role="img" aria-label="'+(show?'Keyboard showing where the notes go':'Blank keyboard you can play')+'">',dots='';
+  let s='<svg '+(attrs||'class="tkb" style="max-width:'+Math.round(x*3.6)+'px;min-width:'+Math.round(x*1.7)+'px"')+' viewBox="0 0 '+x+' '+KBH+'" role="img" aria-label="'+(show?'Keyboard showing where the notes go':'Blank keyboard you can play')+'">',dots='';
   for(let n=lo;n<=hi;n++)if(!isB(n)){
     s+='<rect class="kw" data-m="'+n+'" x="'+pos[n]+'" y="10" width="10" height="40"/>';
     if(hand(n))s+='<rect class="kp k-'+hand(n)+'" x="'+(pos[n]+1.1)+'" y="10.8" width="7.8" height="38.2" rx="1.2"/>';
@@ -2524,13 +2526,15 @@ function tStaff(v,ch,key){
 const KS0={f:0,acc:{C:0,D:0,E:0,F:0,G:0,A:0,B:0}};
 function tSheet(width){
   const steps=TM.steps,walk=TM.src==='song'&&TM.drill!=='each'&&R&&R.segs.length,VW=Math.max(300,width)/1.3,head=38;
+  /* like the Score: each bar's chord on a small fingered keyboard right under it */
+  const showK=!tHid('kb'),kbw=kbWidth(TM.lo,TM.hi),kw=clamp(kbw*.62,Math.min(112,(VW-head-8)/2-12),Math.min(190,VW-head-18)),kh=kw*KBH/kbw;
   const bars=steps.map((s,i)=>{
     let mel=[];
     if(walk&&s.seg!=null){
       const end=TM.drill==='lead'&&steps[i+1]&&steps[i+1].seg>s.seg?steps[i+1].seg:TM.drill==='lead'?R.segs.length:s.seg+1;
       for(let k=s.seg;k<end&&mel.length<=16;k++)R.segs[k].notes.forEach(n=>{if(mel.length<=16)mel.push(n.midi+(TM.drill==='top'?(R.segs[k].shift||0):0));});
     }
-    return {s,i,mel,w:Math.max(64,walk?26+Math.min(mel.length,16)*13:0)};
+    return {s,i,mel,w:Math.max(showK?kw+12:64,walk?26+Math.min(mel.length,16)*13:0)};
   });
   const rows=[];let row=[],x=head;
   bars.forEach((b,i)=>{
@@ -2540,14 +2544,17 @@ function tSheet(width){
     row.push(b);x+=b.w;
   });
   if(row.length)rows.push(row);
-  const mTop=30,tTop=walk?112:52,bTop=tTop+68,H=bTop+32+36,showN=!tHid('name'),showS=!tHid('staff');
+  let kwMax=kw;
+  rows.forEach(r=>{const sum=r.reduce((a,b)=>a+b.w,0),f=clamp((VW-head-4)/sum,1,1.6);r.forEach(b=>{b.w*=f;b.kw=Math.min(b.w-12,210);kwMax=Math.max(kwMax,b.kw);});});
+  const khMax=kwMax*KBH/kbw;
+  const mTop=30,tTop=walk?112:52,bTop=tTop+68,KY=bTop+32+34,H=showK?Math.ceil(KY+khMax+6):bTop+32+36,showN=!tHid('name'),showS=!tHid('staff');
   return rows.map(r=>{
-    const xEnd=head+r.reduce((a,b)=>a+b.w,0);let g='',x=head;
+    const xEnd=head+r.reduce((a,b)=>a+b.w,0);let g='',sel='',x=head;
     (walk?[[mTop,'g'],[tTop,'g'],[bTop,'f']]:[[tTop,'g'],[bTop,'f']]).forEach(([top,cl])=>{for(let l=0;l<5;l++)g+=L(6,top+l*8,xEnd,top+l*8,'sl');g+=clefSvg(cl,10,top);});
     g+=L(6,walk?mTop:tTop,6,bTop+32,'bl');
     r.forEach(b=>{
       const s=b.s,cx=x+(walk?b.w/2:b.w/2+4);
-      g+='<rect class="tsel'+(b.i===TM.i?' on':'')+'" data-step="'+b.i+'" x="'+x+'" y="2" width="'+b.w+'" height="'+(H-4)+'" rx="4"><title>'+esc(s.sym+', '+s.label)+'</title></rect>';
+      sel+='<rect class="tsel'+(b.i===TM.i?' on':'')+'" data-step="'+b.i+'" x="'+x+'" y="2" width="'+b.w+'" height="'+(H-4)+'" rx="4"><title>'+esc(s.sym+', '+s.label)+'</title></rect>';
       if(showN){
         if(s.first||b===r[0])g+=TX(x+5,12,s.sym,'csym');
         g+=TX(x+5,walk?23:25,(s.short||'')+(TM.got[s.id]?' ✓':''),'tsl');
@@ -2557,10 +2564,11 @@ function tSheet(width){
         if(walk)b.mel.slice(0,16).forEach((m,k)=>{g+=tHeads({top:mTop,bot:30},[{sp:spell(m,KS0,s.key.flats),c:'mel',open:false}],x+18+k*13);});
         g+=tChord(s.v,s.ch,s.key,cx,tTop,bTop);
       }
+      if(showK)g+=tKbSvg(s.v,TM.lo,TM.hi,true,!tHid('fing'),'class="tmini" data-step="'+b.i+'" x="'+(x+(b.w-b.kw)/2)+'" y="'+KY+'" width="'+b.kw+'" height="'+(b.kw*KBH/kbw)+'"');
       x+=b.w;
       g+=L(x,walk?mTop:tTop,x,bTop+32,'bl');
     });
-    return '<svg viewBox="0 0 '+VW+' '+H+'" role="img" aria-label="Sheet of the exercise">'+g+'</svg>';
+    return '<svg viewBox="0 0 '+VW+' '+H+'" role="img" aria-label="Sheet of the exercise">'+g+sel+'</svg>';
   }).join('');
 }
 function teachMelStatus(){
