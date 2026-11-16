@@ -72,6 +72,7 @@ label.field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:va
 .cur{fill:var(--mel);opacity:.45}
 .hd.play{--c:var(--mel)}
 #score svg.sys,#pvBody svg.sys,.card{scroll-margin-top:12px}
+#score,#pvBody{scroll-margin-top:8px}
 .kbhl{fill:none;stroke:none}
 .kbhl.on{fill:var(--accent);fill-opacity:.1;stroke:var(--accent);stroke-width:1.6}
 .hn{font:500 10px var(--mono);fill:var(--c)}
@@ -1609,7 +1610,8 @@ function tick(){
     if(lay&&svgs.length){
       const m=Math.floor(t/lay.M),sys=Math.min(svgs.length-1,Math.floor(m/lay.per));
       if(sys!==anim.sys){
-        clearCursor();anim.sys=sys;anim.chord=-1;follow(lay.horiz?host:svgs[sys],lay.horiz?'center':'start');
+        clearCursor();anim.sys=sys;anim.chord=-1;/* phones: score at the top so the fixed keyboard below it stays on screen; wider screens: centred */
+        follow(lay.horiz?host:svgs[sys],lay.horiz&&!(window.matchMedia&&window.matchMedia('(max-width: 700px)').matches)?'center':'start');
         anim.heads=Array.from(svgs[sys].querySelectorAll('.hd')).map(el=>({el,s:+el.dataset.s,e:+el.dataset.e,on:false}));
       }
       anim.heads.forEach(h=>{const on=t>=h.s&&t<h.e;if(on!==h.on){h.on=on;h.el.classList.toggle('play',on);}});
