@@ -207,6 +207,10 @@ h2.tview{font-size:1.5rem}
 .tmini .tdot{display:none}
 .tsel.on{fill:var(--accent);fill-opacity:.12}
 .tsl{font:500 8.5px var(--mono);fill:var(--muted)}
+.tsec{font:700 1rem var(--display);margin:10px 0 0}
+.tsec:first-child{margin-top:0}
+.tsecp{max-width:70ch;font-size:.95rem;margin-bottom:2px}
+.tthink{max-width:60ch;margin-bottom:12px}
 .tsn{font:500 7px var(--mono);fill:var(--muted)}
 </style>
 </head>
@@ -426,7 +430,8 @@ h2.tview{font-size:1.5rem}
     <div class="row">
       <label class="field">Practise <select id="tTopic"></select></label>
       <label class="field">Exercise <select id="tDrill"></select></label>
-      <label class="field">Chords from <select id="tSrc"></select></label>
+      <label class="field" id="tSrcWrap">Chords from <select id="tSrc"></select></label>
+      <label class="field" id="tLKeyWrap" hidden>Key of the 2-5-1 <select id="tLKey"></select></label>
       <label class="field" id="tSizeWrap">Chord size <select id="tSize"><option value="3">Triads</option><option value="7">Sevenths</option></select></label>
       <label class="field" id="tHandWrap">Hand <select id="tHand"><option value="rh">Right</option><option value="lh">Left</option><option value="both">Both</option></select></label>
       <label class="field" id="tOrderWrap">Order <select id="tOrder"><option value="seq">In order</option><option value="shuf">Shuffled</option></select></label>
@@ -1290,6 +1295,8 @@ const INV_SHORT=['Root','1st inv','2nd inv','3rd inv'];
 const TONE_NAME=['root','3rd','5th','7th'];
 const FIFTHS_ORDER=[0,7,2,9,4,11,6,1,8,3,10,5];
 const TEACH={
+  intu:{name:'Lesson: a feel for inversions',drills:{
+    l251:{name:'Seven ideas on a 2-5-1',about:'A short lesson rather than a drill. Seven ideas, each a few bars long, that build a feel for what inversions are for. All of it uses one 2-5-1, the most common three-chord move there is. Work down the sheet an idea at a time; tap a bar to hear it, and find things to try for that idea under the sheet.',how:[]}}},
   inv:{name:'Chord inversions',drills:{
     each:{name:'Every inversion, chord by chord',about:'Each chord in root position, then with every other chord note on the bottom. Same notes each time, in a new order.',
       how:['Play it four times, slowly, saying the chord and the inversion out loud.','Break it up: bottom to top, then top to bottom.','Switch to Recall and play it without the keyboard picture. Peek only if you are stuck.']},
@@ -1324,8 +1331,93 @@ function teachPool(src,res){
   const fam={maj12:'maj',min12:'min',dom12:'dom'}[src]||'maj';
   return FIFTHS_ORDER.map(r=>({ch:{id:r+':'+fam,root:r,fam,kind:fam==='dom'?'s':'d',target:null},key:makeKey(r,fam==='min'?'minor':'major'),seg:null,T:null,bar:null}));
 }
+/* ---------- lesson: a feel for inversions, worked out on a 2-5-1 in any key ---------- */
+const LESSON_251=[
+  {title:'Same notes, new floor',
+   think:'An inversion is the same chord with a different note on the bottom. Nothing about its name or its job changes. Take the bottom note and put it on top, and you have the next inversion.',
+   how:['Play the three shapes up and back down without stopping.','Say the chord name each time. The name does not change when the shape does.','Close your eyes and feel how the hand opens wider for the two inversions.']},
+  {title:'Find the wide gap, find the root',
+   think:'Root position is two thirds stacked, so its notes are evenly spaced. Every inversion of a major or minor chord has one wider gap, a fourth, and the root is always the top note of that gap. Spot the wide gap and you know the chord, whatever order its notes are in.',
+   how:['Play each shape, then touch just the two notes of the wide gap.','Name the upper note of the gap out loud. It is the root every time.','Switch to Read and name each bar from the sheet alone by finding the gap.']},
+  {title:'The top note is the tune',
+   think:'The ear follows the highest note. So choosing an inversion is really choosing which chord note sings on top: the 5th in root position, the root in 1st inversion, the 3rd in 2nd inversion.',
+   how:['Play each shape and hum its top note.','Play the three top notes alone as a little melody, then put the chords back under them.','Decide which top note you like best. That is how arrangers pick an inversion.']},
+  {title:'The 2-5-1 the jumpy way',
+   think:'Here is the 2-5-1 with every chord in root position. It is correct, but the whole hand has to leap on each change and the top note leaps with it. Feel how much work that is before you fix it.',
+   how:['Tap Play through and listen for the lurch between chords.','Play it yourself and watch your hand: every finger leaves its key on every change.']},
+  {title:'The lazy way: keep what is shared, step the rest',
+   think:'Neighbouring chords in a 2-5-1 always share a note. Hold that note still and let the other fingers move to the nearest key of the new chord. The inversion you land on is not picked from a list; it is simply where your hand already is. The left hand takes the root, which is free to jump.',
+   how:['Before each change, find the note both chords share and keep that finger down.','Play only the right hand. It should sound like one line bending, not three blocks.','Go back to idea 4 and compare. Same chords, a fraction of the movement.']},
+  {title:'Start anywhere',
+   think:'Idea 5 began from root position. Here are the other two ways in, one for each remaining shape of the first chord. The rule is the same from every starting point, so you never have to go back to root position first. Each path puts a different note on top, so each has its own colour.',
+   how:['Play idea 5 and these two paths in a row.','Listen to the top line of each path and pick a favourite.','Play any shape of the first chord without looking, then find the other two by feel.']},
+  {title:'Add the 7ths and feel the pull',
+   think:'With 7ths added, two notes stay put on each change and the other two slide down a step. The slide that matters is the 7th of one chord falling to the 3rd of the next. That falling step is the sound of a 2-5-1. Once it feels natural, change Key above and do the whole lesson somewhere less comfortable.',
+   how:['Play only the note that falls on each change, then the full chords.','Hold the two shared notes down and move just the other two.','Change the key and repeat. The shapes change; the moves do not.']}
+];
+function teachLesson(o){
+  const t=mod(o.keyRoot|0,12),key=makeKey(t,'major'),steps=[];
+  const mk=(off,fam)=>({id:mod(t+off,12)+':'+fam,root:mod(t+off,12),fam,kind:'d',target:null});
+  const II=mk(2,'min'),V=mk(7,'dom'),I=mk(0,'maj');
+  const nm=(n,ch)=>spName(n,ch,key),names=(ns,ch)=>ns.map(n=>nm(n,ch)).join(' ');
+  const tn=(n,ch,sev)=>TONE_NAME[chordIv(ch,sev).indexOf(mod(n-ch.root,12))];
+  const list=a=>a.length>1?a.slice(0,-1).join(', ')+' and '+a[a.length-1]:(a[0]||'');
+  const push=(idea,ch,sev,k,ns,how,first,lh)=>steps.push({sym:symbol(ch,key,sev),rn:roman(ch,key,sev),ch,key,seg:null,bar:null,idea,
+    sec:!steps.length||steps[steps.length-1].idea!==idea,first:!!first,label:INV_NAME[k]+(lh?', root in the left hand':''),short:INV_SHORT[k],
+    v:{lh:lh?[atOrAbove(ch.root,36)]:[],rh:ns,T:-1},how,id:['intu',t,steps.length].join('|')});
+  /* the shape of ch closest to prev, voice by voice */
+  const near=(ch,sev,prev)=>{
+    let best=null;
+    chordIv(ch,sev).forEach((x,k)=>[36,48,60,72].forEach(lo=>{
+      const ns=invNotes(ch,sev,k,atOrAbove(mod(ch.root+x,12),lo)),s=ns.reduce((a,n,i)=>a+Math.abs(n-prev[i]),0);
+      if(!best||s<best.s)best={s,ns,k};
+    }));
+    return best;
+  };
+  const moves=(prev,pch,ns,ch)=>{
+    const stay=[],go=[];
+    ns.forEach((n,i)=>{if(n===prev[i])stay.push(nm(n,ch));else go.push(nm(prev[i],pch)+' moves '+(n>prev[i]?'up':'down')+' to '+nm(n,ch));});
+    return (stay.length?list(stay)+(stay.length>1?' stay':' stays')+' where '+(stay.length>1?'they are':'it is')+'. ':'')+(go.length?list(go)+'.':'');
+  };
+  const climb=(ch,k)=>{const x0=atOrAbove(ch.root,55);return invNotes(ch,false,k,x0+chordIv(ch,false)[k]);};
+  /* 1: one chord, three floors */
+  [0,1,2].forEach(k=>{const ns=climb(II,k);push(0,II,false,k,ns,
+    ['Stacked in thirds: '+names(ns,II)+'. This is the shape you already know.','Lift the bottom note to the top: '+names(ns,II)+'. Still '+symbol(II,key,false)+'.','Lift the bottom note again: '+names(ns,II)+'. One more lift and you are back in root position, an octave up.'][k],k===0);});
+  /* 2: the fourth points at the root */
+  [0,1,2].forEach(k=>{const ns=climb(V,k),a=k===1?ns[1]:ns[0],b=k===1?ns[2]:ns[1];push(1,V,false,k,ns,
+    k===0?names(ns,V)+': two thirds stacked, no wide gap, so the root is on the bottom.'
+      :names(ns,V)+': the wide gap is '+nm(a,V)+' up to '+nm(b,V)+', at the '+(k===1?'top':'bottom')+' of the shape. Its upper note, '+nm(b,V)+', is the root.',k===0);});
+  /* 3: what sits on top */
+  [0,1,2].forEach(k=>{const ns=climb(I,k),top=ns[ns.length-1];push(2,I,false,k,ns,names(ns,I)+': the top note is '+nm(top,I)+', the '+tn(top,I,false)+'. That is the note a listener hears as the tune.',k===0);});
+  /* 4: all root position */
+  let prev=null,pch=null;
+  [II,V,I].forEach((ch,i)=>{
+    const lo=atOrAbove(ch.root,57),r=!prev?lo:[lo-12,lo,lo+12].reduce((a,b)=>Math.abs(b-prev[0])<Math.abs(a-prev[0])?b:a),ns=invNotes(ch,false,0,r);
+    push(3,ch,false,0,ns,!prev?'Start here: '+names(ns,ch)+'.':names(ns,ch)+': every finger jumps '+Math.abs(ns[0]-prev[0])+' semitones from the last chord.',i===0,true);
+    prev=ns;pch=ch;
+  });
+  /* 5 and 6: nearest shapes, from each shape of the first chord */
+  const path=(idea,k0,sev)=>{
+    let ns=invNotes(II,sev,k0,atOrAbove(mod(II.root+chordIv(II,sev)[k0],12),k0?55:57)),k=k0;prev=null;
+    [II,V,I].forEach((ch,i)=>{
+      if(prev){const b=near(ch,sev,prev);ns=b.ns;k=b.k;}
+      let how=!prev?'Start here: '+names(ns,ch)+(sev?'. The top note, '+nm(ns[ns.length-1],ch)+', is the 7th.':'.'):names(ns,ch)+'. '+moves(prev,pch,ns,ch);
+      if(sev&&prev){
+        const p7=prev.find(n=>mod(n-pch.root,12)===seventh(pch.fam,1)),th=ns.find(n=>mod(n-ch.root,12)===third(ch.fam));
+        if(p7!=null&&th!=null&&p7-th>0&&p7-th<=2)how+=' The 7th of '+symbol(pch,key,true)+' ('+nm(p7,pch)+') has fallen to the 3rd of this chord ('+nm(th,ch)+').';
+      }
+      push(idea,ch,sev,k,ns,how,i===0,true);
+      prev=ns;pch=ch;
+    });
+  };
+  path(4,0,false);
+  [1,2].forEach(k=>path(5,k,false));
+  path(6,0,true);
+  return steps;
+}
 /* o: {topic, drill, src, sev, hand, res, tag}. Returns the steps of one exercise, each with a voicing to show and hear. */
 function teachSteps(o){
+  if(o.topic==='intu')return teachLesson(o);
   const sev=o.topic==='shell'||o.src==='dom12'||!!o.sev,pool=teachPool(o.src,o.res),steps=[];
   if(!pool.length)return steps;
   const song=o.src==='song',drill=(o.drill==='top'&&!song)?'each':o.drill;
@@ -1411,7 +1503,7 @@ function teachSteps(o){
   }
   return steps;
 }
-if(typeof module!=='undefined')module.exports={TEACH,teachSteps,invNotes,chordPart,partNotes,parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
+if(typeof module!=='undefined')module.exports={TEACH,teachSteps,LESSON_251,invNotes,chordPart,partNotes,parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
 </script>
 
 <script>
@@ -2429,14 +2521,14 @@ async function askClaude(){
 
 /* ---------- teaching mode: pick what to practise, step through it, hide what you want to memorise ---------- */
 const TKEY='chordVoicer.teach';
-const TM={speed:1,view:'sheet',rec:false,open:false,topic:'inv',drill:'each',src:'song',size:'3',hand:'rh',order:'seq',hide:{},got:{},i:0,steps:[],peek:false,run:null,plan:null,lo:48,hi:71};
-try{const s=JSON.parse(localStorage.getItem(TKEY)||'null');if(s)['topic','drill','src','size','hand','order','hide','got','view','speed'].forEach(k=>{if(s[k]!=null)TM[k]=s[k];});}catch(e){}
+const TM={lkey:0,speed:1,view:'sheet',rec:false,open:false,topic:'inv',drill:'each',src:'song',size:'3',hand:'rh',order:'seq',hide:{},got:{},i:0,steps:[],peek:false,run:null,plan:null,lo:48,hi:71};
+try{const s=JSON.parse(localStorage.getItem(TKEY)||'null');if(s)['topic','drill','src','size','hand','order','hide','got','view','speed','lkey'].forEach(k=>{if(s[k]!=null)TM[k]=s[k];});}catch(e){}
 if(!TEACH[TM.topic])TM.topic='inv';
-if(!TEACH[TM.topic].drills[TM.drill])TM.drill='each';
+if(!TEACH[TM.topic].drills[TM.drill])TM.drill=Object.keys(TEACH[TM.topic].drills)[0];
 if(!['song','maj12','min12','dom12'].includes(TM.src))TM.src='song';
 if(typeof TM.hide!=='object'||!TM.hide)TM.hide={};
 if(typeof TM.got!=='object'||!TM.got)TM.got={};
-function teachSave(){try{localStorage.setItem(TKEY,JSON.stringify({speed:TM.speed,view:TM.view,topic:TM.topic,drill:TM.drill,src:TM.src,size:TM.size,hand:TM.hand,order:TM.order,hide:TM.hide,got:TM.got}));}catch(e){}}
+function teachSave(){try{localStorage.setItem(TKEY,JSON.stringify({lkey:TM.lkey,speed:TM.speed,view:TM.view,topic:TM.topic,drill:TM.drill,src:TM.src,size:TM.size,hand:TM.hand,order:TM.order,hide:TM.hide,got:TM.got}));}catch(e){}}
 const TSHOW={name:'Chord name',kb:'Key placements',fing:'Finger numbers',staff:'Sheet music',notes:'Note names'};
 const TPRESET={learn:['Learn: show everything',[]],recall:['Recall: name only',['kb','fing','staff','notes']],read:['Read: sheet music only',['name','kb','fing','notes']],ear:['By ear: hide it all',['name','kb','fing','staff','notes']]};
 const tCur=()=>TM.steps[TM.i]||null;
@@ -2446,9 +2538,10 @@ function teachStop(){if(TM.run){clearTimeout(TM.run);TM.run=null;}}
 const tSpeed=()=>clamp(+TM.speed||1,.5,2.5);
 function teachBuild(keep){
   teachStop();
+  if(!TEACH[TM.topic].drills[TM.drill])TM.drill=Object.keys(TEACH[TM.topic].drills)[0];
   if(TM.drill==='top'&&TM.src!=='song')TM.drill='each';
-  let steps=teachSteps({topic:TM.topic,drill:TM.drill,src:TM.src,sev:TM.size==='7',hand:TM.hand,res:R,tag:S.demo||''});
-  if(TM.order==='shuf'&&TM.drill!=='lead'){
+  let steps=teachSteps({topic:TM.topic,drill:TM.drill,src:TM.src,sev:TM.size==='7',hand:TM.hand,res:R,tag:S.demo||'',keyRoot:TM.lkey});
+  if(TM.order==='shuf'&&TM.drill!=='lead'&&TM.topic!=='intu'){
     steps=steps.slice();
     for(let i=steps.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)),t=steps[i];steps[i]=steps[j];steps[j]=t;}
   }
@@ -2468,12 +2561,15 @@ function teachControls(){
     saved.map(n=>'<option value="saved:'+esc(n)+'">Your song: '+esc(n)+'</option>').join('')+'</optgroup>'+
     '<optgroup label="All twelve keys"><option value="maj12">Major chords</option><option value="min12">Minor chords</option><option value="dom12">Dominant 7ths</option></optgroup>';
   $('tSrc').value=TM.src;
-  $('tSizeWrap').hidden=TM.topic==='shell'||TM.src==='dom12';$('tSize').value=TM.size;
+  const les=TM.topic==='intu';
+  $('tSrcWrap').hidden=les;$('tLKeyWrap').hidden=!les;$('tLKey').value=TM.lkey;
+  $('tSizeWrap').hidden=les||TM.topic==='shell'||TM.src==='dom12';$('tSize').value=TM.size;
   $('tHandWrap').hidden=!(TM.topic==='inv'&&TM.drill==='each');$('tHand').value=TM.hand;
-  $('tOrderWrap').hidden=TM.drill==='lead';$('tOrder').value=TM.order;
+  $('tOrderWrap').hidden=les||TM.drill==='lead';$('tOrder').value=TM.order;
   $('tAbout').textContent=tp.drills[TM.drill].about+(TM.topic==='shell'&&song?' Chords the song plays as plain triads are given the 7th that belongs to the key.':'');
   const n=song&&has?new Set(R.segs.map(s=>s.chord.id)).size:0;
-  $('tSrcLine').textContent=song?(has?'Built from '+cur+' · '+R.key.label+' · '+n+' different chord'+(n===1?'':'s'):'No melody loaded yet.'):'Built from all twelve keys, going round the circle of fifths.';
+  if(les){const k=makeKey(mod(TM.lkey|0,12),'major'),c=(o,f)=>symbol({root:mod(k.tonic+o,12),fam:f,kind:'d'},k,false);$('tSrcLine').textContent='A lesson on one 2-5-1 in '+k.label+': '+c(2,'min')+', '+c(7,'dom')+', '+c(0,'maj')+'.';}
+  else $('tSrcLine').textContent=song?(has?'Built from '+cur+' · '+R.key.label+' · '+n+' different chord'+(n===1?'':'s'):'No melody loaded yet.'):'Built from all twelve keys, going round the circle of fifths.';
 }
 /* the step's keyboard: every key can be tapped; placements and finger numbers can be hidden */
 function tKbSvg(v,lo,hi,show,fing,attrs){
@@ -2530,7 +2626,7 @@ function tStaff(v,ch,key){
    When the exercise follows a song, the melody notes of each bar are written on their own staff above (pitches in order, not their rhythm). */
 const KS0={f:0,acc:{C:0,D:0,E:0,F:0,G:0,A:0,B:0}};
 function tSheet(width){
-  const steps=TM.steps,walk=TM.src==='song'&&TM.drill!=='each'&&R&&R.segs.length,VW=Math.max(300,width)/1.3,head=38;
+  const steps=TM.steps,walk=TM.topic!=='intu'&&TM.src==='song'&&TM.drill!=='each'&&R&&R.segs.length,VW=Math.max(300,width)/1.3,head=38;
   /* like the Score: each bar's chord on a small fingered keyboard right under it */
   const showK=!tHid('kb'),kbw=kbWidth(TM.lo,TM.hi),kw=clamp(kbw*.62,Math.min(112,(VW-head-8)/2-12),Math.min(190,VW-head-18)),kh=kw*KBH/kbw;
   const bars=steps.map((s,i)=>{
@@ -2561,7 +2657,7 @@ function tSheet(width){
       const s=b.s,cx=x+(walk?b.w/2:b.w/2+4);
       sel+='<rect class="tsel'+(b.i===TM.i?' on':'')+'" data-step="'+b.i+'" x="'+x+'" y="2" width="'+b.w+'" height="'+(H-4)+'" rx="4"><title>'+esc(s.sym+', '+s.label)+'</title></rect>';
       if(showN){
-        if(s.first||b===r[0])g+=TX(x+5,12,s.sym,'csym');
+        if(s.first||s.idea>2||b===r[0])g+=TX(x+5,12,s.sym,'csym');
         g+=TX(x+5,walk?23:25,(s.short||'')+(TM.got[s.id]?' ✓':''),'tsl');
       }
       if(walk&&s.bar&&b.mel.length)g+=TX(x+b.w-4,12,'bar '+s.bar,'tsn','end');
@@ -2573,7 +2669,8 @@ function tSheet(width){
       x+=b.w;
       g+=L(x,walk?mTop:tTop,x,bTop+32,'bl');
     });
-    return '<svg viewBox="0 0 '+VW+' '+H+'" role="img" aria-label="Sheet of the exercise">'+g+sel+'</svg>';
+    const hd=r[0].s.sec&&r[0].s.idea!=null?'<h3 class="tsec">'+(r[0].s.idea+1)+'. '+esc(LESSON_251[r[0].s.idea].title)+'</h3><p class="tsecp">'+esc(LESSON_251[r[0].s.idea].think)+'</p>':'';
+    return hd+'<svg viewBox="0 0 '+VW+' '+H+'" role="img" aria-label="Sheet of the exercise">'+g+sel+'</svg>';
   }).join('');
 }
 function teachMelStatus(){
@@ -2633,8 +2730,8 @@ function teachRender(){
   $('tMel').hidden=!sg;
   $('tRun').textContent=TM.run?'Stop':'Play through';
   $('tPeek').hidden=!hidden.length;$('tPeek').textContent=TM.peek?'Hide again':'Peek';$('tPeek').setAttribute('aria-pressed',TM.peek);
-  const d=TEACH[TM.topic].drills[TM.drill];
-  $('tCoach').innerHTML='<div class="tcoach"><div><h3>How to practise this step</h3><ol>'+d.how.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol></div>'+
+  const idea=st.idea!=null?LESSON_251[st.idea]:null,d=idea||TEACH[TM.topic].drills[TM.drill];
+  $('tCoach').innerHTML='<div class="tcoach"><div>'+(idea?'<h3>Idea '+(st.idea+1)+' of '+LESSON_251.length+': '+esc(idea.title)+'</h3><p class="tthink">'+esc(idea.think)+'</p><h3>Try this</h3><ol>':'<h3>How to practise this step</h3><ol>')+d.how.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol></div>'+
     '<div><h3>Make it yours</h3><p>'+esc(TEACH_IDEAS[TM.i%TEACH_IDEAS.length])+'</p>'+
     (TM.plan?'<h3>From Claude</h3><p>'+esc(TM.plan.plan)+'</p>'+(TM.plan.steps.length?'<ol>'+TM.plan.steps.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol>':''):'')+'</div></div>';
 }
@@ -2721,7 +2818,9 @@ function teachInit(){
   $('teachBtn').onclick=()=>teachOpen(true);
   $('tClose').onclick=()=>teachOpen(false);
   const set=(k,v)=>{TM[k]=v;TM.plan=null;teachSave();teachBuild(false);};
-  $('tTopic').onchange=e=>{TM.drill=TEACH[e.target.value].drills[TM.drill]?TM.drill:'each';set('topic',e.target.value);};
+  $('tTopic').onchange=e=>set('topic',e.target.value);
+  $('tLKey').innerHTML=FIFTHS_ORDER.map(r=>'<option value="'+r+'">'+makeKey(r,'major').label+'</option>').join('');
+  $('tLKey').onchange=e=>set('lkey',+e.target.value);
   $('tDrill').onchange=e=>set('drill',e.target.value);
   $('tSize').onchange=e=>set('size',e.target.value);
   $('tHand').onchange=e=>set('hand',e.target.value);
