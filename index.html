@@ -1351,6 +1351,12 @@ const LESSON_251=[
   {title:'Start anywhere',
    think:'Idea 5 began from root position. Here are the other two ways in, one for each remaining shape of the first chord. The rule is the same from every starting point, so you never have to go back to root position first. Each path puts a different note on top, so each has its own colour.',
    how:['Play idea 5 and these two paths in a row.','Listen to the top line of each path and pick a favourite.','Play any shape of the first chord without looking, then find the other two by feel.']},
+  {title:'A 7th chord is a triad with one more third',
+   think:'Stack one more third on top of a triad and you have a 7th chord. There is a quicker way to find the new note: it is the note just below the root. A whole step below in a minor 7th or a dominant 7th, only a half step below in a major 7th. That closeness to the root is the whole character of the chord.',
+   how:['Play each triad, then add the new note with your little finger and hear what it changes.','Play the root an octave up, then slide it down to the 7th. Whole step or half step?','Play the three 7th chords back to back and listen for the one whose top note sits tightest against the root.']},
+  {title:'The giveaway for 7ths: two notes that touch',
+   think:'Triads gave themselves away with a wide gap. 7th chords do the opposite. Root position is all thirds, so no two notes are neighbours. In every inversion the 7th and the root land side by side, and the root is the upper one of the pair. Where the pair sits tells you the inversion: at the top is 1st, in the middle is 2nd, at the bottom is 3rd. In a major 7th the pair is only a half step apart, so it sounds tighter.',
+   how:['Play each shape, then play just the two notes that touch.','Name the upper note of the pair out loud. It is the root every time.','Switch to Read and name each bar from the sheet by finding the pair.']},
   {title:'Add the 7ths and feel the pull',
    think:'With 7ths added, two notes stay put on each change and the other two slide down a step. The slide that matters is the 7th of one chord falling to the 3rd of the next. That falling step is the sound of a 2-5-1. Once it feels natural, change Key above and do the whole lesson somewhere less comfortable.',
    how:['Play only the note that falls on each change, then the full chords.','Hold the two shared notes down and move just the other two.','Change the key and repeat. The shapes change; the moves do not.']}
@@ -1379,7 +1385,7 @@ function teachLesson(o){
     ns.forEach((n,i)=>{if(n===prev[i])stay.push(nm(n,ch));else go.push(nm(prev[i],pch)+' moves '+(n>prev[i]?'up':'down')+' to '+nm(n,ch));});
     return (stay.length?list(stay)+(stay.length>1?' stay':' stays')+' where '+(stay.length>1?'they are':'it is')+'. ':'')+(go.length?list(go)+'.':'');
   };
-  const climb=(ch,k)=>{const x0=atOrAbove(ch.root,55);return invNotes(ch,false,k,x0+chordIv(ch,false)[k]);};
+  const climb=(ch,k,sev)=>{const x0=atOrAbove(ch.root,55);return invNotes(ch,!!sev,k,x0+chordIv(ch,!!sev)[k]);};
   /* 1: one chord, three floors */
   [0,1,2].forEach(k=>{const ns=climb(II,k);push(0,II,false,k,ns,
     ['Stacked in thirds: '+names(ns,II)+'. This is the shape you already know.','Lift the bottom note to the top: '+names(ns,II)+'. Still '+symbol(II,key,false)+'.','Lift the bottom note again: '+names(ns,II)+'. One more lift and you are back in root position, an octave up.'][k],k===0);});
@@ -1412,7 +1418,19 @@ function teachLesson(o){
   };
   path(4,0,false);
   [1,2].forEach(k=>path(5,k,false));
-  path(6,0,true);
+  /* 7: how a 7th chord is made */
+  [II,V,I].forEach(ch=>{
+    const tri=climb(ch,0),sv=climb(ch,0,true),top=sv[3],gap=tri[0]+12-top;
+    push(6,ch,false,0,tri,names(tri,ch)+': the triad.',true);
+    push(6,ch,true,0,sv,'Add '+nm(top,ch)+' on top: one more third above '+nm(tri[2],ch)+', and a '+(gap===1?'half':'whole')+' step below the root '+nm(tri[0],ch)+'.',false);
+  });
+  /* 8: the touching pair points at the root */
+  [V,I].forEach(ch=>[0,1,2,3].forEach(k=>{
+    const ns=climb(ch,k,true),a=ns[k?3-k:0],b=ns[k?4-k:0];
+    push(7,ch,true,k,ns,k===0?names(ns,ch)+': all thirds. No two notes touch, so the root is on the bottom.'
+      :names(ns,ch)+': the pair that touches is '+nm(a,ch)+' and '+nm(b,ch)+', '+['','at the top','in the middle','at the bottom'][k]+' of the shape'+(b-a===1?', a half step apart':'')+'. The upper one, '+nm(b,ch)+', is the root.',k===0);
+  }));
+  path(8,0,true);
   return steps;
 }
 /* o: {topic, drill, src, sev, hand, res, tag}. Returns the steps of one exercise, each with a voicing to show and hear. */
@@ -2641,8 +2659,13 @@ function tSheet(width){
   const rows=[];let row=[],x=head;
   bars.forEach((b,i)=>{
     let need=b.w;
-    if(b.s.first&&!walk){need=0;for(let k=i;k<bars.length&&(k===i||!bars[k].s.first);k++)need+=bars[k].w;if(need>VW-head-4)need=b.w;}
-    if(row.length&&x+need>VW-4){rows.push(row);row=[];x=head;}
+    if(b.s.first&&!walk){
+      let n=0;need=0;for(let k=i;k<bars.length&&(k===i||!bars[k].s.first);k++){need+=bars[k].w;n++;}
+      /* a group too long for one line: split it into two even lines rather than leave one bar dangling */
+      if(need>VW-head-4){need=b.w;if(n>2&&bars[i+Math.ceil(n/2)])bars[i+Math.ceil(n/2)].brk=true;}
+    }
+    /* a lesson starts each idea, and each group within it, on a fresh line */
+    if(row.length&&(x+need>VW-4||b.brk||b.s.sec||(b.s.idea!=null&&b.s.first))){rows.push(row);row=[];x=head;}
     row.push(b);x+=b.w;
   });
   if(row.length)rows.push(row);
@@ -2658,7 +2681,7 @@ function tSheet(width){
       const s=b.s,cx=x+(walk?b.w/2:b.w/2+4);
       sel+='<rect class="tsel'+(b.i===TM.i?' on':'')+'" data-step="'+b.i+'" x="'+x+'" y="2" width="'+b.w+'" height="'+(H-4)+'" rx="4"><title>'+esc(s.sym+', '+s.label)+'</title></rect>';
       if(showN){
-        if(s.first||s.idea>2||b===r[0])g+=TX(x+5,12,s.sym,'csym');
+        if(s.first||(s.idea>2&&s.idea!==7)||b===r[0])g+=TX(x+5,12,s.sym,'csym');
         g+=TX(x+5,walk?23:25,(s.short||'')+(TM.got[s.id]?' ✓':''),'tsl');
       }
       if(walk&&s.bar&&b.mel.length)g+=TX(x+b.w-4,12,'bar '+s.bar,'tsn','end');
