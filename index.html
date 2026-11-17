@@ -431,7 +431,7 @@ h2.tview{font-size:1.5rem}
       <label class="field">Practise <select id="tTopic"></select></label>
       <label class="field">Exercise <select id="tDrill"></select></label>
       <label class="field" id="tSrcWrap">Chords from <select id="tSrc"></select></label>
-      <label class="field" id="tLKeyWrap" hidden>Key of the 2-5-1 <select id="tLKey"></select></label>
+      <label class="field" id="tLKeyWrap" hidden>Key of the lesson <select id="tLKey"></select></label>
       <label class="field" id="tSizeWrap">Chord size <select id="tSize"><option value="3">Triads</option><option value="7">Sevenths</option></select></label>
       <label class="field" id="tHandWrap">Hand <select id="tHand"><option value="rh">Right</option><option value="lh">Left</option><option value="both">Both</option></select></label>
       <label class="field" id="tOrderWrap">Order <select id="tOrder"><option value="seq">In order</option><option value="shuf">Shuffled</option></select></label>
@@ -1297,6 +1297,8 @@ const FIFTHS_ORDER=[0,7,2,9,4,11,6,1,8,3,10,5];
 const TEACH={
   intu:{name:'Lesson: a feel for inversions',drills:{
     l251:{name:'Seven ideas on a 2-5-1',about:'A short lesson rather than a drill. Seven ideas, each a few bars long, that build a feel for what inversions are for. All of it uses one 2-5-1, the most common three-chord move there is. Work down the sheet an idea at a time; tap a bar to hear it, and find things to try for that idea under the sheet.',how:[]}}},
+  intv:{name:'Lesson: a feel for intervals',drills:{
+    liv:{name:'Eight ideas on twelve distances',about:'A short lesson rather than a drill. Eight ideas that turn interval names from something you count into something you see and hear. Every bar is two notes: Hear it plays them together, Hear it broken plays the bottom one first. Under each name is the bottom note and how many half steps up the top one is. Work down the sheet an idea at a time, then use Read, Recall and By ear on the last idea to test yourself.',how:[]}}},
   inv:{name:'Chord inversions',drills:{
     each:{name:'Every inversion, chord by chord',about:'Each chord in root position, then with every other chord note on the bottom. Same notes each time, in a new order.',
       how:['Play it four times, slowly, saying the chord and the inversion out loud.','Break it up: bottom to top, then top to bottom.','Switch to Recall and play it without the keyboard picture. Peek only if you are stuck.']},
@@ -1313,6 +1315,7 @@ const TEACH={
       how:['Play the left hand alone, then add the right.','Tap With the melody and play the shell where it lands.','Hold the left hand and play the melody notes of this bar over it.']}}}
 };
 const TEACH_IDEAS=['Play it in the rhythm of a bar from the song.','Roll it slowly from the bottom and let the top note ring.','Move the same shape up an octave and notice how the colour changes.','Hold the chord in one hand and make up three notes over it with the other.','Play it as quietly as you can, then as fully as you can.','Change one note and decide whether you like it better. Name what you changed.','Play it, then sing its lowest note.','Loop this chord and the one before it until you can do it with your eyes shut.'];
+const TEACH_IDEAS_IV=['Play it from three other bottom notes without looking anything up.','Play the top note first and come down. Same distance, same name.','Sing the bottom note, then sing the top one before you play it.','Find it somewhere in a tune you know and play that bit.','Play it low on the piano, then high, and notice the character stays.','Close your eyes, drop a finger on any key, and build this distance above it.','Play it, then the one a half step wider, and name both.','Hold the bottom note and hum the top one over it.'];
 const chordIv=(ch,sev)=>{const f=ch.fam,iv=[0,third(f),fifth(f)];if(sev)iv.push(seventh(f,1));return iv;};
 /* the chord's notes going up from its k-th note, which sits at or above lo */
 function invNotes(ch,sev,k,lo){
@@ -1433,9 +1436,118 @@ function teachLesson(o){
   path(8,0,true);
   return steps;
 }
+/* ---------- lesson: a feel for intervals, measured from the keynote of any major key ---------- */
+const IV=[null,{n:2,q:'m',name:'Minor 2nd'},{n:2,q:'M',name:'Major 2nd'},{n:3,q:'m',name:'Minor 3rd'},{n:3,q:'M',name:'Major 3rd'},{n:4,q:'P',name:'Perfect 4th'},{n:4,q:'T',name:'Tritone'},
+  {n:5,q:'P',name:'Perfect 5th'},{n:6,q:'m',name:'Minor 6th'},{n:6,q:'M',name:'Major 6th'},{n:7,q:'m',name:'Minor 7th'},{n:7,q:'M',name:'Major 7th'},{n:8,q:'P',name:'Octave'}];
+const IV_A=['','','a 2nd','a 3rd','a 4th','a 5th','a 6th','a 7th','an octave'];
+const IV_NUM=['','','two','three','four','five','six','seven','eight'];
+const IV_SOUND=[null,
+  'Tight and tense, two neighbouring keys rubbing. The Jaws theme.',
+  'One plain step up a scale. The start of Frère Jacques.',
+  'Soft and sad. The start of Greensleeves.',
+  'Bright and settled, the bottom of a major chord. Oh When the Saints.',
+  'Strong and open, a call to attention. Here Comes the Bride.',
+  'Restless, it wants to move somewhere. Maria from West Side Story, or the start of The Simpsons theme.',
+  'Hollow and steady. The leap in Twinkle Twinkle Little Star.',
+  'A sad reach upward. The big leap near the start of The Entertainer.',
+  'Warm and wide. My Bonnie Lies Over the Ocean.',
+  'Bluesy and unfinished. Somewhere from West Side Story.',
+  'Bright and aching, almost an octave. The chorus of Take On Me.',
+  'The same note, higher. Somewhere Over the Rainbow.'];
+const LESSON_IV=[
+  {title:'Count letters first, then measure',
+   think:'An interval name has two parts. The number comes from counting letter names, both ends included: C up to E is C, D, E, so it is some kind of 3rd. The word in front (major, minor, perfect) comes from the exact size in half steps. The major scale is your ruler. From a keynote up to any note of its own major scale, the interval is always major or perfect: 2nds, 3rds, 6ths and 7ths are major; 4ths, 5ths and the octave are perfect.',
+   how:['Play the bottom note, then the top note, and say the letters you pass through out loud.','Sing up the scale from the bottom note until you land on the top one. How many notes you sang is the number.','Say the full name, then play the two notes together.']},
+  {title:'Minor is major pulled in a half step',
+   think:'Every 2nd, 3rd, 6th and 7th comes in two sizes. Keep the bottom note, lower the top note a half step, and major becomes minor. The letters do not change, so the number does not change. That leaves four small sizes worth knowing cold: 1 and 2 half steps are the 2nds, 3 and 4 are the 3rds. A major 3rd is two whole steps; a minor 3rd is a whole step and a half.',
+   how:['Play the major one, then pull the top note down a half step and hear it darken.','Go back and forth between the pair until you could tell them apart with your eyes shut.','For the 2nds and 3rds, count the half steps on the keys once: 1, 2, 3, 4. After that, never count them again.']},
+  {title:'4ths and 5ths: same colour, with two exceptions each',
+   think:'Perfect 4ths and 5ths have no major and minor. They are the frame the others hang on: a 5th is the outside of every major and minor chord, and a 4th is the wide gap you found in the inversions. On the keys, both notes of a perfect 5th are the same colour unless the bottom note is B or B♭. A perfect 4th is the same unless the bottom note is F or F♯. Squeeze a 5th or stretch a 4th by a half step and you get the tritone: 6 half steps, exactly half an octave.',
+   how:['Play the 4th and the 5th from the keynote and check the colours of the keys.','Play the four odd ones out. Each mixes a white key with a black one.','Play 4th, tritone, 5th in a row and listen to the middle one refuse to settle.']},
+  {title:'Big ones: measure down from the octave',
+   think:'Counting 9 or 10 half steps is slow and easy to get wrong, so measure big intervals from the other side. Picture the bottom note an octave up and see how far the top note sits below it. A major 7th is a half step short of the octave, a minor 7th a whole step short, a major 6th a minor 3rd short, a minor 6th a major 3rd short. Flipped pairs always add up to nine, and major swaps with minor: 2nd with 7th, 3rd with 6th, 4th with 5th. It is the same flip that makes a chord inversion.',
+   how:['Play the big interval, then move the bottom note up an octave and play the small one that is left.','Say both names. The numbers add up to nine every time.','Find a major 7th from any key by reaching for the octave and coming back a half step.']},
+  {title:'On the sheet: odd numbers match',
+   think:'You can name the number from the page without reading a single note. In 3rds, 5ths and 7ths the two notes match: both on lines or both in spaces. A 3rd is the very next line or space, a 5th skips one, a 7th skips two. In 2nds, 4ths, 6ths and octaves they do not match: one is on a line and the other in a space. A 2nd is the only one where the notes touch. The key signature and any sharps or flats then tell you whether it is major, minor or perfect.',
+   how:['Switch to Read and name each bar from its shape before you work out a single letter.','Trace the lines and spaces between the two notes with a finger.','Open any sheet music and name the number of ten intervals as fast as you can.']},
+  {title:'Give each one a sound',
+   think:'A name sticks when it is tied to a sound you already own. Each of the twelve has a character, and a tune that starts with it. The tunes only cover the rising version, so lean on the character as soon as you can. Do not take on all twelve at once. Start with three that sound nothing alike, such as the minor 2nd, the perfect 5th and the octave, and add one more when those are easy.',
+   how:['Tap Hear it broken, then sing the two notes back before you name them.','Switch to By ear, pick three bars, and name each from the sound alone. Peek to check.','Add a new interval only when the ones you have are easy. A few minutes a day beats one long sitting.']},
+  {title:'Find them inside the chords you play',
+   think:'Chords are stacks of these same distances, so naming intervals is naming the parts of a voicing. A major triad is a major 3rd with a minor 3rd on top, inside a perfect 5th. A minor triad is the same two 3rds the other way up. The 7th and the root of a 7th chord sit a 2nd apart: that is the pair that touches in the inversions. In a dominant 7th the 3rd and the 7th are a tritone apart, and that restless sound is why the chord wants to move on.',
+   how:['Play the whole chord first, then just the two notes of the bar, and name the distance.','Play the tritone alone, then let it close in to the root and 3rd of the home chord.','Take any voicing in the app and name every distance between neighbouring notes.']},
+  {title:'Mixed bag: name it before you count',
+   think:'Now the bottom note moves around, as it does in real music. Run the same quick check on every bar. How many letters? That is the number. Is it the size the bottom note\'s own major scale would give, or a half step smaller? If it is big, measure down from the octave. The buttons above test one skill at a time: Read leaves only the sheet, Recall gives you the name to find on the keys, By ear leaves only the sound.',
+   how:['Name the number from the letters or the shape first, then decide the size.','Switch to Recall: read the name, find the two keys, then Peek.','Switch to By ear and tap Hear it broken. Sing it, name it, Peek.','Change Key above and the whole lesson moves. The thinking stays the same.']}
+];
+const LESSONS={intu:LESSON_251,intv:LESSON_IV};
+/* two notes spelled so the letter count matches the interval's number (C up to E♭ for a minor 3rd, never D♯) */
+function ivSpell(lo,size,key,n,L){
+  const mk=(m,l)=>{const a=mod(m-LETTER_PC[l]+6,12)-6;return {step:(Math.floor((m-a)/12)-1)*7+LETTERS.indexOf(l),acc:a,L:l};};
+  const first=L||spellRoot(mod(lo,12),key)[0];
+  for(const l of [first].concat(LETTERS.split('').filter(x=>x!==first))){
+    const a=mk(lo,l);if(Math.abs(a.acc)>1)continue;
+    const b=mk(lo+size,LETTERS[(LETTERS.indexOf(l)+n-1)%7]);
+    if(Math.abs(b.acc)<=1)return {a,b};
+  }
+  const ks=keySig(key);return {a:spell(lo,ks,key.flats),b:spell(lo+size,ks,key.flats)};
+}
+function teachIntervals(o){
+  const t=mod(o.keyRoot|0,12),key=makeKey(t,'major'),W=t<=5?60:48,T0=W+t,steps=[];
+  const at=pc=>atOrAbove(mod(pc,12),W);
+  const nm=sp=>sp.L+(sp.acc>0?'♯':sp.acc<0?'♭':''),hs=n=>n+' half step'+(n>1?'s':''),isB=m=>[1,3,6,8,10].includes(mod(m,12));
+  const low=size=>IV[size].name.toLowerCase(),an=size=>(size===12?'an ':'a ')+low(size),cap=x=>x[0].toUpperCase()+x.slice(1);
+  const push=(idea,lo,size,how,first,opt)=>{
+    opt=opt||{};const d=IV[size],n=opt.n||d.n,sp=ivSpell(lo,size,key,n,opt.L),a=nm(sp.a),b=nm(sp.b);
+    const letters=Array.from({length:n},(_,i)=>LETTERS[(LETTERS.indexOf(sp.a.L)+i)%7]).join(' ');
+    steps.push({sym:d.name,rn:'',ch:{id:'iv',root:mod(lo,12),fam:'maj',kind:'d',target:null},key,seg:null,bar:null,idea,
+      sec:!steps.length||steps[steps.length-1].idea!==idea,first:!!first,nm:true,minw:82,label:'up from '+a,short:a+' up '+size,
+      v:{lh:[],rh:[lo,lo+size],T:-1},sp:{[lo]:sp.a,[lo+size]:sp.b},how:how({a,b,d,n,sp,letters}),id:['intv',t,steps.length].join('|')});
+    return sp;
+  };
+  /* 1: the major scale as a ruler */
+  [2,4,5,7,9,11,12].forEach((s,i)=>push(0,T0,s,x=>x.a+' up to '+x.b+': '+x.letters+', '+IV_NUM[x.n]+' letters, so '+IV_A[x.n]+'. '+cap(hs(s))+', the '+(x.d.q==='P'?'perfect':'major')+' size.',i===0));
+  /* 2: major and minor side by side */
+  [[2,1],[4,3],[9,8],[11,10]].forEach(([M,m],i)=>{
+    push(1,T0,M,x=>x.a+' up to '+x.b+': '+hs(M)+'. The size the major scale gives.',i%2===0);
+    push(1,T0,m,x=>'Lower the top note a half step: '+x.a+' up to '+x.b+', '+hs(m)+'. The same letters, so still '+IV_A[x.n]+', now minor.');
+  });
+  /* 3: the frame, and the four that break the colour rule */
+  [5,6,7].forEach((s,i)=>push(2,T0,s,x=>x.a+' up to '+x.b+': '+hs(s)+'. '+(s===6?'One more than the 4th, one less than the 5th, and half an octave exactly.'
+    :isB(T0)===isB(T0+s)?'Both keys are '+(isB(T0)?'black':'white')+'.':'One white key and one black: this is one of the odd ones out.'),i===0));
+  [[10,7,'B'],[11,7,'B'],[5,5,'F'],[6,5,'F']].forEach(([pc,s,L],i)=>push(2,at(pc),s,x=>x.a+' up to '+x.b+': '+an(s)+' that mixes a '+(isB(pc)?'black key with a white':'white key with a black')+' one.',i===0,{L}));
+  /* 4: flip it and measure from the octave */
+  const SHORT={1:'a half step',2:'a whole step',3:'a minor 3rd',4:'a major 3rd',5:'a perfect 4th'};
+  [[11,1],[10,2],[9,3],[8,4],[7,5]].forEach(([big,small],i)=>{
+    const sp=push(3,T0,big,x=>x.a+' up to '+x.b+': '+hs(big)+' if you count them. Quicker: '+x.b+' is '+SHORT[small]+' below the next '+x.a+'.',i%2===0);
+    push(3,T0+big,small,x=>'What is left: '+x.a+' up to '+x.b+', '+an(small)+'. '+cap(IV_A[IV[big].n])+' and '+IV_A[IV[small].n]+' make nine.',false,{L:sp.b.L});
+  });
+  /* 5: the shape on the page */
+  [4,7,11,2,5,9,12].forEach((s,i)=>push(4,T0,s,x=>{
+    const ln=x.sp.a.step%2===0,odd=x.n%2===1;
+    return (odd?'Both notes '+(ln?'on lines':'in spaces')+', '+['the very next one up','with one skipped','with two skipped'][(x.n-3)/2]
+      :'One '+(ln?'on a line, one in a space':'in a space, one on a line')+', '+(x.n===2?'and the notes touch':'a little wider than '+IV_A[x.n-1]))+
+      ': '+IV_A[x.n]+'. In '+key.label+' that is '+x.a+' up to '+x.b+', '+an(s)+'.';
+  },i===0||i===3));
+  /* 6: all twelve, each with its character */
+  for(let s=1;s<=12;s++)push(5,T0,s,x=>x.a+' up to '+x.b+'. '+IV_SOUND[s],(s-1)%4===0);
+  /* 7: the distances inside the dominant 7th of the key */
+  const V={id:mod(t+7,12)+':dom',root:mod(t+7,12),fam:'dom',kind:'d',target:null},R=at(t+7),vs=symbol(V,key,true),rl=LETTERS.indexOf(spellRoot(V.root,key)[0]);
+  [[0,4,0,'the root and the 3rd'],[4,3,2,'the 3rd and the 5th'],[0,7,0,'the root and the 5th, the outside of the triad'],[7,3,4,'the 5th and the 7th'],[4,6,2,'the 3rd and the 7th',5],[10,2,6,'the 7th and the root above it, the pair that touches'],[0,10,0,'the root and the 7th']]
+    .forEach(([off,s,dl,part,n],i)=>push(6,R+off,s,x=>'Inside '+vs+', '+part+': '+x.a+' up to '+x.b+', '+an(s)+'.',i===0,{L:LETTERS[(rl+dl)%7],n}));
+  /* 8: every interval once, from bottom notes all over the scale */
+  [[0,7],[2,3],[5,9],[4,1],[7,4],[9,8],[2,10],[5,6],[7,5],[9,2],[0,11],[4,12]].forEach(([deg,s],i)=>push(7,at(t+deg),s,x=>{
+    if(s===12)return x.a+' up to the next '+x.b+': the same letter eight letters on, an octave.';
+    const base=x.a+' up to '+x.b+': '+x.letters+', '+IV_NUM[x.n]+' letters, '+IV_A[x.n]+'. ';
+    return base+(x.d.q==='m'?'A half step under what the '+x.a+' major scale would give, so minor.':x.d.q==='T'?'A half step wider than a perfect 4th: the tritone.'
+      :'The '+x.a+' major scale has that '+x.b+', so '+(x.d.q==='P'?'perfect':'major')+'.');
+  },i%4===0));
+  return steps;
+}
 /* o: {topic, drill, src, sev, hand, res, tag}. Returns the steps of one exercise, each with a voicing to show and hear. */
 function teachSteps(o){
   if(o.topic==='intu')return teachLesson(o);
+  if(o.topic==='intv')return teachIntervals(o);
   const sev=o.topic==='shell'||o.src==='dom12'||!!o.sev,pool=teachPool(o.src,o.res),steps=[];
   if(!pool.length)return steps;
   const song=o.src==='song',drill=(o.drill==='top'&&!song)?'each':o.drill;
@@ -1521,7 +1633,7 @@ function teachSteps(o){
   }
   return steps;
 }
-if(typeof module!=='undefined')module.exports={TEACH,teachSteps,LESSON_251,invNotes,chordPart,partNotes,parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
+if(typeof module!=='undefined')module.exports={TEACH,teachSteps,LESSON_251,LESSON_IV,LESSONS,invNotes,chordPart,partNotes,parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
 </script>
 
 <script>
@@ -2559,7 +2671,7 @@ function teachBuild(keep){
   if(!TEACH[TM.topic].drills[TM.drill])TM.drill=Object.keys(TEACH[TM.topic].drills)[0];
   if(TM.drill==='top'&&TM.src!=='song')TM.drill='each';
   let steps=teachSteps({topic:TM.topic,drill:TM.drill,src:TM.src,sev:TM.size==='7',hand:TM.hand,res:R,tag:S.demo||'',keyRoot:TM.lkey});
-  if(TM.order==='shuf'&&TM.drill!=='lead'&&TM.topic!=='intu'){
+  if(TM.order==='shuf'&&TM.drill!=='lead'&&!LESSONS[TM.topic]){
     steps=steps.slice();
     for(let i=steps.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)),t=steps[i];steps[i]=steps[j];steps[j]=t;}
   }
@@ -2579,14 +2691,14 @@ function teachControls(){
     saved.map(n=>'<option value="saved:'+esc(n)+'">Your song: '+esc(n)+'</option>').join('')+'</optgroup>'+
     '<optgroup label="All twelve keys"><option value="maj12">Major chords</option><option value="min12">Minor chords</option><option value="dom12">Dominant 7ths</option></optgroup>';
   $('tSrc').value=TM.src;
-  const les=TM.topic==='intu';
+  const les=!!LESSONS[TM.topic];
   $('tSrcWrap').hidden=les;$('tLKeyWrap').hidden=!les;$('tLKey').value=TM.lkey;
   $('tSizeWrap').hidden=les||TM.topic==='shell'||TM.src==='dom12';$('tSize').value=TM.size;
   $('tHandWrap').hidden=!(TM.topic==='inv'&&TM.drill==='each');$('tHand').value=TM.hand;
   $('tOrderWrap').hidden=les||TM.drill==='lead';$('tOrder').value=TM.order;
   $('tAbout').textContent=tp.drills[TM.drill].about+(TM.topic==='shell'&&song?' Chords the song plays as plain triads are given the 7th that belongs to the key.':'');
   const n=song&&has?new Set(R.segs.map(s=>s.chord.id)).size:0;
-  if(les){const k=makeKey(mod(TM.lkey|0,12),'major'),c=(o,f)=>symbol({root:mod(k.tonic+o,12),fam:f,kind:'d'},k,false);$('tSrcLine').textContent='A lesson on one 2-5-1 in '+k.label+': '+c(2,'min')+', '+c(7,'dom')+', '+c(0,'maj')+'.';}
+  if(les){const k=makeKey(mod(TM.lkey|0,12),'major'),c=(o,f)=>symbol({root:mod(k.tonic+o,12),fam:f,kind:'d'},k,false);$('tSrcLine').textContent=TM.topic==='intv'?'A lesson on the twelve intervals, measured from the keynote of '+k.label+'.':'A lesson on one 2-5-1 in '+k.label+': '+c(2,'min')+', '+c(7,'dom')+', '+c(0,'maj')+'.';}
   else $('tSrcLine').textContent=song?(has?'Built from '+cur+' · '+R.key.label+' · '+n+' different chord'+(n===1?'':'s'):'No melody loaded yet.'):'Built from all twelve keys, going round the circle of fifths.';
 }
 /* the step's keyboard: every key can be tapped; placements and finger numbers can be hidden */
@@ -2629,32 +2741,33 @@ function tHeads(st,items,X){
   return g;
 }
 /* two hands: left on the bass staff, right on the treble, so the hands read apart */
-function tChord(v,ch,key,X,tTop,bTop){
+function tChord(v,ch,key,X,tTop,bTop,sp){
   const ks=keySig(key),two=v.lh.length&&v.rh.length,sts=[{top:tTop,bot:30,it:[]},{top:bTop,bot:18,it:[]}];
   const all1=v.lh.concat(v.rh),hi1=all1.reduce((x,n)=>x+n,0)/(all1.length||1)>=59;   /* one hand: keep the whole shape on one staff */
-  uniq(all1).forEach(n=>sts[(two?(v.lh.includes(n)?n>=65:n>=55):hi1)?0:1].it.push({sp:spellChord(n,ch,key,ks),c:n===v.T?'mel':v.lh.includes(n)?'lh':'rh',open:true}));
+  uniq(all1).forEach(n=>sts[(two?(v.lh.includes(n)?n>=65:n>=55):hi1)?0:1].it.push({sp:(sp&&sp[n])||spellChord(n,ch,key,ks),c:n===v.T?'mel':v.lh.includes(n)?'lh':'rh',open:true}));
   return tHeads(sts[0],sts[0].it,X)+tHeads(sts[1],sts[1].it,X);
 }
-function tStaff(v,ch,key){
+function tStaff(v,ch,key,sp){
   let g='';
   [38,108].forEach((top,i)=>{for(let l=0;l<5;l++)g+=L(8,top+l*8,140,top+l*8,'sl');g+=clefSvg(i?'f':'g',13,top);});
-  g+=tChord(v,ch,key,92,38,108)+L(8,38,8,140,'bl')+L(140,38,140,140,'bl');
+  g+=tChord(v,ch,key,92,38,108,sp)+L(8,38,8,140,'bl')+L(140,38,140,140,'bl');
   return '<svg class="tstaff" viewBox="0 0 148 172" role="img" aria-label="The chord in sheet music">'+g+'</svg>';
 }
 /* the whole exercise as one sheet: a bar per step, the forms of one chord kept on one line where they fit.
    When the exercise follows a song, the melody notes of each bar are written on their own staff above (pitches in order, not their rhythm). */
 const KS0={f:0,acc:{C:0,D:0,E:0,F:0,G:0,A:0,B:0}};
 function tSheet(width){
-  const steps=TM.steps,walk=TM.topic!=='intu'&&TM.src==='song'&&TM.drill!=='each'&&R&&R.segs.length,VW=Math.max(300,width)/1.3,head=38;
+  const steps=TM.steps,walk=!LESSONS[TM.topic]&&TM.src==='song'&&TM.drill!=='each'&&R&&R.segs.length,VW=Math.max(300,width)/1.3,head=38;
   /* like the Score: each bar's chord on a small fingered keyboard right under it */
-  const showK=!tHid('kb'),kbw=kbWidth(TM.lo,TM.hi),kw=clamp(kbw*.62,Math.min(112,(VW-head-8)/2-12),Math.min(190,VW-head-18)),kh=kw*KBH/kbw;
+  const showK=!tHid('kb'),kbw=kbWidth(TM.lo,TM.hi),kw0=clamp(kbw*.62,Math.min(112,(VW-head-8)/2-12),Math.min(190,VW-head-18)),
+    kw=TM.topic==='intv'?Math.min(kw0,Math.max(70,(VW-head-8)/2-12)):kw0,kh=kw*KBH/kbw;   /* intervals come in pairs: keep two bars to a line on a phone */
   const bars=steps.map((s,i)=>{
     let mel=[];
     if(walk&&s.seg!=null){
       const end=TM.drill==='lead'&&steps[i+1]&&steps[i+1].seg>s.seg?steps[i+1].seg:TM.drill==='lead'?R.segs.length:s.seg+1;
       for(let k=s.seg;k<end&&mel.length<=16;k++)R.segs[k].notes.forEach(n=>{if(mel.length<=16)mel.push(n.midi+(TM.drill==='top'?(R.segs[k].shift||0):0));});
     }
-    return {s,i,mel,w:Math.max(showK?kw+12:64,walk?26+Math.min(mel.length,16)*13:0)};
+    return {s,i,mel,w:Math.max(showK?kw+12:64,!tHid('name')&&s.minw||0,walk?26+Math.min(mel.length,16)*13:0)};
   });
   const rows=[];let row=[],x=head;
   bars.forEach((b,i)=>{
@@ -2681,19 +2794,19 @@ function tSheet(width){
       const s=b.s,cx=x+(walk?b.w/2:b.w/2+4);
       sel+='<rect class="tsel'+(b.i===TM.i?' on':'')+'" data-step="'+b.i+'" x="'+x+'" y="2" width="'+b.w+'" height="'+(H-4)+'" rx="4"><title>'+esc(s.sym+', '+s.label)+'</title></rect>';
       if(showN){
-        if(s.first||(s.idea>2&&s.idea!==7)||b===r[0])g+=TX(x+5,12,s.sym,'csym');
+        if(s.first||s.nm||(s.idea>2&&s.idea!==7)||b===r[0])g+=TX(x+5,12,s.sym,'csym');
         g+=TX(x+5,walk?23:25,(s.short||'')+(TM.got[s.id]?' ✓':''),'tsl');
       }
       if(walk&&s.bar&&b.mel.length)g+=TX(x+b.w-4,12,'bar '+s.bar,'tsn','end');
       if(showS){
         if(walk)b.mel.slice(0,16).forEach((m,k)=>{g+=tHeads({top:mTop,bot:30},[{sp:spell(m,KS0,s.key.flats),c:'mel',open:false}],x+18+k*13);});
-        g+=tChord(s.v,s.ch,s.key,cx,tTop,bTop);
+        g+=tChord(s.v,s.ch,s.key,cx,tTop,bTop,s.sp);
       }
       if(showK)g+=tKbSvg(s.v,TM.lo,TM.hi,true,!tHid('fing'),'class="tmini" data-step="'+b.i+'" x="'+(x+(b.w-b.kw)/2)+'" y="'+KY+'" width="'+b.kw+'" height="'+(b.kw*KBH/kbw)+'"');
       x+=b.w;
       g+=L(x,walk?mTop:tTop,x,bTop+32,'bl');
     });
-    const hd=r[0].s.sec&&r[0].s.idea!=null?'<h3 class="tsec">'+(r[0].s.idea+1)+'. '+esc(LESSON_251[r[0].s.idea].title)+'</h3><p class="tsecp">'+esc(LESSON_251[r[0].s.idea].think)+'</p>':'';
+    const LS=LESSONS[TM.topic]||LESSON_251,hd=r[0].s.sec&&r[0].s.idea!=null?'<h3 class="tsec">'+(r[0].s.idea+1)+'. '+esc(LS[r[0].s.idea].title)+'</h3><p class="tsecp">'+esc(LS[r[0].s.idea].think)+'</p>':'';
     return hd+'<svg viewBox="0 0 '+VW+' '+H+'" role="img" aria-label="Sheet of the exercise">'+g+sel+'</svg>';
   }).join('');
 }
@@ -2731,12 +2844,12 @@ function teachRender(){
   const hidden=Object.keys(TSHOW).filter(k=>TM.hide[k]),same=a=>a.length===hidden.length&&a.every(k=>TM.hide[k]);
   $('tShow').innerHTML=Object.keys(TPRESET).map(k=>'<button class="chip'+(same(TPRESET[k][1])?' pinned':'')+'" type="button" data-preset="'+k+'">'+TPRESET[k][0]+'</button>').join('')+
     '<span class="tsep" aria-hidden="true"></span><span class="small">Showing</span>'+Object.keys(TSHOW).map(k=>'<button class="chip tog" type="button" data-show="'+k+'" aria-pressed="'+!TM.hide[k]+'">'+TSHOW[k]+'</button>').join('');
-  const sg=st.seg!=null&&R?R.segs[st.seg]:null,v=st.v,rh=v.rh.filter(m=>m!==v.T),names=a=>a.map(m=>vName(m,st.ch,st.key)).join(' ');
+  const sg=st.seg!=null&&R?R.segs[st.seg]:null,v=st.v,rh=v.rh.filter(m=>m!==v.T),spn=m=>{const q=st.sp&&st.sp[m];return q?q.L+(q.acc>0?'♯':q.acc<0?'♭':'')+(Math.floor(m/12)-1):vName(m,st.ch,st.key);},names=a=>a.map(spn).join(' ');
   const ctx=[st.bar?(TM.drill==='each'?'First in bar ':'Bar ')+st.bar:'',st.rn].filter(Boolean).join(' · ');
   const allHid=Object.keys(TSHOW).every(k=>tHid(k));
   let h='<div class="thead"><div>'+(tHid('name')?'<div class="sym thid">Name hidden</div>':'<div class="sym">'+esc(st.sym)+'</div><div class="tlabel">'+esc(st.label)+'</div>')+'</div><div class="rn">'+esc(ctx)+'</div></div>';
   if(sg&&TM.drill!=='each')h+='<div class="melline">Melody here: '+sg.notes.map(m=>noteName(m.midi,R.key)).join(' ')+'</div>';
-  if(allHid)h+='<p class="thow">Everything is hidden. Tap Hear it, find the chord on the keys by ear, then Peek to check.</p>';
+  if(allHid)h+='<p class="thow">'+(TM.topic==='intv'?'Everything is hidden. Tap Hear it broken, sing the two notes back, name the distance, then Peek to check.':'Everything is hidden. Tap Hear it, find the chord on the keys by ear, then Peek to check.')+'</p>';
   else if(!tHid('notes'))h+='<p class="thow">'+esc(st.how)+'</p>';
   h+='<div class="tkbwrap">'+tKbSvg(v,TM.lo,TM.hi,!tHid('kb'),!tHid('fing'))+'</div>';
   if(tHid('kb')&&!allHid)h+='<p class="small">Key placements are hidden. Find the chord yourself, then tap Peek to check.</p>';
@@ -2744,7 +2857,7 @@ function teachRender(){
   ['tViewSheet','tViewStep'].forEach(id=>$(id).setAttribute('aria-pressed',(id==='tViewSheet')===sheet));
   $('tSheet').hidden=!sheet;
   if(sheet){$('tSheet').innerHTML=tSheet($('tSheet').clientWidth-22);if(TM.run){const on=$('tSheet').querySelector('.tsel.on');if(on)on.closest('svg').scrollIntoView({block:'nearest'});}}
-  if((!sheet&&!tHid('staff'))||!tHid('notes'))h+='<div class="tfoot">'+(sheet||tHid('staff')?'':tStaff(v,st.ch,st.key))+
+  if((!sheet&&!tHid('staff'))||!tHid('notes'))h+='<div class="tfoot">'+(sheet||tHid('staff')?'':tStaff(v,st.ch,st.key,st.sp))+
     (tHid('notes')?'':'<div class="notes">'+(v.lh.length?'<div><span class="tag lh">LH</span>'+names(v.lh)+'</div>':'')+(rh.length?'<div><span class="tag rh">RH</span>'+names(rh)+'</div>':'')+(v.T>=0?'<div><span class="tag mel">Top</span>'+vName(v.T,st.ch,st.key)+'</div>':'')+'</div>')+'</div>';
   $('tCard').innerHTML=h;
   /* on a narrow screen the keyboard scrolls sideways; start it centred on the chord */
@@ -2754,9 +2867,9 @@ function teachRender(){
   $('tMel').hidden=!sg;
   $('tRun').textContent=TM.run?'Stop':'Play through';
   $('tPeek').hidden=!hidden.length;$('tPeek').textContent=TM.peek?'Hide again':'Peek';$('tPeek').setAttribute('aria-pressed',TM.peek);
-  const idea=st.idea!=null?LESSON_251[st.idea]:null,d=idea||TEACH[TM.topic].drills[TM.drill];
-  $('tCoach').innerHTML='<div class="tcoach"><div>'+(idea?'<h3>Idea '+(st.idea+1)+' of '+LESSON_251.length+': '+esc(idea.title)+'</h3><p class="tthink">'+esc(idea.think)+'</p><h3>Try this</h3><ol>':'<h3>How to practise this step</h3><ol>')+d.how.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol></div>'+
-    '<div><h3>Make it yours</h3><p>'+esc(TEACH_IDEAS[TM.i%TEACH_IDEAS.length])+'</p>'+
+  const LS=LESSONS[TM.topic]||LESSON_251,idea=st.idea!=null?LS[st.idea]:null,d=idea||TEACH[TM.topic].drills[TM.drill];
+  $('tCoach').innerHTML='<div class="tcoach"><div>'+(idea?'<h3>Idea '+(st.idea+1)+' of '+LS.length+': '+esc(idea.title)+'</h3><p class="tthink">'+esc(idea.think)+'</p><h3>Try this</h3><ol>':'<h3>How to practise this step</h3><ol>')+d.how.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol></div>'+
+    '<div><h3>Make it yours</h3><p>'+esc((TM.topic==='intv'?TEACH_IDEAS_IV:TEACH_IDEAS)[TM.i%TEACH_IDEAS.length])+'</p>'+
     (TM.plan?'<h3>From Claude</h3><p>'+esc(TM.plan.plan)+'</p>'+(TM.plan.steps.length?'<ol>'+TM.plan.steps.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol>':''):'')+'</div></div>';
 }
 const tHeld=new Set();
