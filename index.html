@@ -2610,10 +2610,11 @@ function tHeads(st,items,X){
   hs.forEach(h=>{const cx=X+h.off;g+='<ellipse class="hd c-'+h.c+(h.open?' open':'')+'" cx="'+cx+'" cy="'+h.y+'" rx="'+(h.open?4.8:4.4)+'" ry="3.2" transform="rotate(-22 '+cx+' '+h.y+')"/>';});
   return g;
 }
-/* two hands: left on the bass staff, right on the treble, so the hands read apart; one hand: split at middle C */
+/* two hands: left on the bass staff, right on the treble, so the hands read apart */
 function tChord(v,ch,key,X,tTop,bTop){
   const ks=keySig(key),two=v.lh.length&&v.rh.length,sts=[{top:tTop,bot:30,it:[]},{top:bTop,bot:18,it:[]}];
-  uniq(v.lh.concat(v.rh)).forEach(n=>sts[(two?(v.lh.includes(n)?n>=65:n>=55):n>=60)?0:1].it.push({sp:spellChord(n,ch,key,ks),c:n===v.T?'mel':v.lh.includes(n)?'lh':'rh',open:true}));
+  const all1=v.lh.concat(v.rh),hi1=all1.reduce((x,n)=>x+n,0)/(all1.length||1)>=59;   /* one hand: keep the whole shape on one staff */
+  uniq(all1).forEach(n=>sts[(two?(v.lh.includes(n)?n>=65:n>=55):hi1)?0:1].it.push({sp:spellChord(n,ch,key,ks),c:n===v.T?'mel':v.lh.includes(n)?'lh':'rh',open:true}));
   return tHeads(sts[0],sts[0].it,X)+tHeads(sts[1],sts[1].it,X);
 }
 function tStaff(v,ch,key){
