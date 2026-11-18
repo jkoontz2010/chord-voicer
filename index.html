@@ -1299,6 +1299,8 @@ const TEACH={
     l251:{name:'Seven ideas on a 2-5-1',about:'A short lesson rather than a drill. Seven ideas, each a few bars long, that build a feel for what inversions are for. All of it uses one 2-5-1, the most common three-chord move there is. Work down the sheet an idea at a time; tap a bar to hear it, and find things to try for that idea under the sheet.',how:[]}}},
   intv:{name:'Lesson: a feel for intervals',drills:{
     liv:{name:'Eight ideas on twelve distances',about:'A short lesson rather than a drill. Eight ideas that turn interval names from something you count into something you see and hear. Every bar is two notes: Hear it plays them together, Hear it broken plays the bottom one first. Under each name is the bottom note and how many half steps up the top one is. Work down the sheet an idea at a time, then use Read, Recall and By ear on the last idea to test yourself.',how:[]}}},
+  zan:{name:'Lesson: To Zanarkand, play it and write against it',drills:{
+    lz:{name:'Fourteen ideas in three parts',about:'A lesson on To Zanarkand, Nobuo Uematsu\'s piano piece from Final Fantasy X, in E minor. Ideas 1 to 3 show how it is built, 4 to 9 walk through playing it from the first bar to the last, and 10 to 14 are for writing your own music against its melody. The harmony, the left hand and the exercises are all here. The melody itself is not written out: read it from your own sheet music, or use Load a song with a MIDI file of the piece. Tap a bar to hear it, tap Play through to hear the bars in order from the one you are on, and find things to try under the sheet.',how:[]}}},
   inv:{name:'Chord inversions',drills:{
     each:{name:'Every inversion, chord by chord',about:'Each chord in root position, then with every other chord note on the bottom. Same notes each time, in a new order.',
       how:['Play it four times, slowly, saying the chord and the inversion out loud.','Break it up: bottom to top, then top to bottom.','Switch to Recall and play it without the keyboard picture. Peek only if you are stuck.']},
@@ -1316,6 +1318,7 @@ const TEACH={
 };
 const TEACH_IDEAS=['Play it in the rhythm of a bar from the song.','Roll it slowly from the bottom and let the top note ring.','Move the same shape up an octave and notice how the colour changes.','Hold the chord in one hand and make up three notes over it with the other.','Play it as quietly as you can, then as fully as you can.','Change one note and decide whether you like it better. Name what you changed.','Play it, then sing its lowest note.','Loop this chord and the one before it until you can do it with your eyes shut.'];
 const TEACH_IDEAS_IV=['Play it from three other bottom notes without looking anything up.','Play the top note first and come down. Same distance, same name.','Sing the bottom note, then sing the top one before you play it.','Find it somewhere in a tune you know and play that bit.','Play it low on the piano, then high, and notice the character stays.','Close your eyes, drop a finger on any key, and build this distance above it.','Play it, then the one a half step wider, and name both.','Hold the bottom note and hum the top one over it.'];
+const TEACH_IDEAS_ZAN=['Play it and hum any note of the tune over it.','Roll it from the bottom as slowly as you can and let the top note ring.','Play it an octave higher and decide whether the piece would survive up there.','Hold the left hand and make up three notes over it with the right.','Play it as quietly as you can, then at full weight.','Change one note and decide whether you like it better. Name what you changed.','Play it, then sing its lowest note.','Loop this bar and the one before it with your eyes shut.'];
 const chordIv=(ch,sev)=>{const f=ch.fam,iv=[0,third(f),fifth(f)];if(sev)iv.push(seventh(f,1));return iv;};
 /* the chord's notes going up from its k-th note, which sits at or above lo */
 function invNotes(ch,sev,k,lo){
@@ -1480,7 +1483,136 @@ const LESSON_IV=[
    think:'Now the bottom note moves around, as it does in real music. Run the same quick check on every bar. How many letters? That is the number. Is it the size the bottom note\'s own major scale would give, or a half step smaller? If it is big, measure down from the octave. The buttons above test one skill at a time: Read leaves only the sheet, Recall gives you the name to find on the keys, By ear leaves only the sound.',
    how:['Name the number from the letters or the shape first, then decide the size.','Switch to Recall: read the name, find the two keys, then Peek.','Switch to By ear and tap Hear it broken. Sing it, name it, Peek.','Change Key above and the whole lesson moves. The thinking stays the same.']}
 ];
-const LESSONS={intu:LESSON_251,intv:LESSON_IV};
+/* ---------- lesson: To Zanarkand (Nobuo Uematsu, Final Fantasy X), in E minor: how it is built, how to play it, how to write against it.
+   The harmony, the left hand and the exercises are here; the melody is read from the player's own score or MIDI file. ---------- */
+const LESSON_ZAN=[
+  {title:'How it is built: two kinds of minor',
+   think:'The piece is in E minor and is one singable line over a rolling left hand. Most of it uses the plain minor scale, with D natural. That is where the soft B minor chord comes from. Only at the end of a phrase is D raised to D♯, which turns B minor into B major. That one raised note is what makes the phrase want to go home to E minor. It was first written for a flute, which is why the tune breathes: a long note, a few steps, another long note.',
+   how:['Play B minor to E minor, then B major to E minor. Hear which one insists on going home.','Play the E minor scale with D natural, then with D♯. Those are the two colours of the piece.','Find the D♯ in your score. It is rare, and it is always near the end of a phrase.']},
+  {title:'How it is built: the falling bass',
+   think:'Under the main tune the lowest note walks down the scale: E, D, C, B, A, G, F♯, then jumps to B. One chord for each bass note, about a bar each. The tune tries to rise while the bass falls, and that pull in two directions is the longing in the piece. Scores name some of these chords differently, because a rolled chord with few notes can be heard two ways. The bass line is the fixed part; treat the names as options.',
+   how:['Play only the left hand notes and say their names: E, D, C, B, A, G, F♯, B.','Tap Play through and follow the bass with your ear, not the chords.','Play the right hand shapes alone. Most fingers move a step or stay put.']},
+  {title:'How it is built: the held note that falls',
+   think:'The phrase ends with its most recognisable gesture. Over the B chord the note E hangs on from the bar before, where a D♯ ought to be. Then it gives in and falls a half step. Held, then released: a suspension. You will use it again when you write your own ending.',
+   how:['Play the first bar and wait until the E starts to bother you. Then let it fall.','Lean on the held note and play the note it falls to more softly.','Play it three times, waiting a different length each time. The wait is yours to choose.']},
+  {title:'Play it: the left hand first',
+   think:'The left hand has the same job for most of the piece, so learn it alone until it runs by itself. Each chord is opened out wider than an octave: bottom note, a fifth above, then the third on top. Hear it broken plays the shape rising. In the piece it rises and comes back down in even eighth notes, as your score shows. Do not stretch for the top note. Let the wrist turn and the hand travel. Change the pedal exactly as each new bass note sounds.',
+   how:['Play each shape as a solid block first, four slow beats each.','Roll it up and back down. No note should stick out, least of all the thumb.','Add the pedal: up and down again right on each new bass note. One pedal for each chord.','Start at a slow walking pace. The real tempo comes last.']},
+  {title:'Play it: the first statement, one voice over the roll',
+   think:'The tune enters alone, one note at a time, soft. The whole skill here is balance: the right hand sings at a medium volume and the left hand plays at half of that. These three bars are a balance drill, not the tune. Each holds one long note over a rolling left hand, which is the texture of the opening. Once the balance is right, put the real melody from your score in the right hand.',
+   how:['Play the top note firmly and the left hand as if you were trying not to wake someone.','Read the melody from your score, right hand alone, and sing along. Mark where you would breathe.','Join the hands a bar at a time, then two, then four.','Count through the long notes. Rushing them is the most common mistake in this piece.']},
+  {title:'Play it: the restatement, the tune gets company',
+   think:'The melody comes round again, and many editions now put harmony notes under it in the same hand. The top note is still the tune, so it has to sound louder than the notes beneath it even though the weakest fingers are playing it. Come up one level in volume from the first time, no more.',
+   how:['Play the top note loud and the lower notes of the right hand almost silently.','Tilt the hand slightly towards the little finger and let its weight go there.','Play the same bars of your score this way: tune on top, everything else under it.']},
+  {title:'Play it: the middle builds',
+   think:'New material. The harmony leans on C and D, the two major chords just under the keynote, and for a moment it sounds as if the piece might settle in G major. The melody climbs. Grow across the whole section rather than getting loud at once, and let the left hand reach lower as you go.',
+   how:['Block the left hand chords of this section in your score first. The pattern of shapes changes here.','Play these four bars and notice the brighter sound: three major chords in a row.','Find the low bass notes by feel before you add the right hand.']},
+  {title:'Play it: the climax, octaves and weight',
+   think:'The main idea returns at full strength, usually with the tune in octaves or full chords and the bass doubled. Play from the arm and drop weight into the keys instead of hitting them. This is also where notes from outside E minor appear, so circle every accidental in your score. Thick chords blur quickly: change the pedal more often here.',
+   how:['Learn the top line of each right hand chord alone, then add the notes under it.','Let the arm fall into each chord and release at once. Loud should not mean stiff.','Broaden the tempo a little at the very peak, then come back.']},
+  {title:'Play it: the way out',
+   think:'The opening texture comes back and thins out. Drop to very soft straight away; the contrast with the climax is the effect. Slow down over the last two or three bars, hold the final E minor with the pedal and let it die away completely before you lift.',
+   how:['Play the last chord and listen until you cannot hear it any more. That is how long to hold it.','Play the climax bars, then these two, without a break. Practise the drop in volume.']},
+  {title:'Write against it: every melody note has three homes',
+   think:'To put new chords under a tune you need to know which chords will take each note. Any note of the scale is the root of one chord, the 3rd of another and the 5th of a third. Here are four notes the tune rests on, each held on top of its three chords. The long notes in the melody are where a chord has to agree with the tune. The quick notes between them can pass over almost anything.',
+   how:['Hold the top note and play the three chords under it in turn. Same note, three moods.','Take the first long note of the tune in your score and try all three of its chords under it.','Mark every long note in the first phrase and choose a chord for each. That is a reharmonisation.','Record the tune above, or load a MIDI of it, and compare the chords the app suggests with yours.']},
+  {title:'Write against it: keep the tune, change the floor',
+   think:'The falling bass is only one choice. Hold a single low E under every chord and the tune hangs in the air, still and a little dark. Send the bass upward instead and the same melody sounds hopeful. On each strong beat, check the distance between your bass note and the tune: 3rds, 6ths, 5ths and octaves sound settled, 2nds and 7ths want to move.',
+   how:['Play the four bars over the held E, then play the first phrase of the tune over them.','Play the four rising bars and do the same. Decide which floor you prefer.','Write your own eight bass notes, one for each bar, and try the tune over them.']},
+  {title:'Write against it: swap a chord for its cousin',
+   think:'Chords that share two notes can stand in for each other. Each pair here is the chord from the piece followed by a cousin a third below it, with a 7th added. The tune note almost always still fits, because it is one of the shared notes, but the mood shifts. The last pair swaps the firm B major for the softer B minor, which takes away the pull home.',
+   how:['Play each pair back and forth and name the notes that stay.','Go through the falling bass and swap one chord for its cousin. Then swap two.','Play the tune over your version. Keep the swaps you like and throw out the rest.']},
+  {title:'Write against it: a second voice',
+   think:'A counter-melody is a second tune that fits the first. The rule that matters most: move when the tune holds, hold when the tune moves. Here is a line ready made, ten notes above the bass all the way down. It is slow and smooth, so it fills the long notes of the tune without fighting it. Use it as a starting point and bend it.',
+   how:['Play the upper notes alone as a tune of their own.','Play this line in the left hand, an octave lower, while the right hand plays the melody.','Change two notes of the line so that it moves in the opposite direction to the tune.','Add one quick note of your own wherever the melody holds still.']},
+  {title:'Write against it: now your own tune',
+   think:'Take the melody away and keep the floor. Loop these bars and write a new tune over them. Start with three to five notes and a rhythm you can sing. Say it again. Change its ending. Go higher the third time, then come down and finish with the held note that falls. That is all Uematsu does, and it is enough. When you have something, tap Record a new melody above and play it in. The app will build chords for your tune, and you can compare them with these.',
+   how:['Tap Play through and sing over the loop before you touch the keys.','Keep to the notes of E minor at first. Let your long notes land on notes of the chord.','Leave gaps. The left hand keeps moving, so a held note is never empty.','Record it above. Then use the other exercises in Teaching mode on your own piece.']}
+];
+function teachZanarkand(){
+  const key=makeKey(4,'minor'),steps=[];
+  const C=(root,fam)=>({id:root+':'+fam,root,fam,kind:'d',target:null});
+  const Em=C(4,'min'),Bm=C(11,'min'),B=C(11,'maj'),D=C(2,'maj'),Cc=C(0,'maj'),G=C(7,'maj'),Am=C(9,'min'),Fs=C(6,'hdim');
+  const nn=(n,ch)=>spName(n,ch,key),names=(ns,ch)=>ns.map(n=>nn(n,ch)).join(' ');
+  const push=(idea,sym,rn,ch,lh,rh,short,how,first,T)=>steps.push({sym,rn,ch,key,seg:null,bar:null,idea,
+    sec:!steps.length||steps[steps.length-1].idea!==idea,first:!!first,nm:true,minw:74,label:short,short,
+    v:{lh,rh,T:T==null?-1:T},how:typeof how==='function'?how(names(lh,ch),names(rh,ch)):how,id:'zan|'+steps.length});
+  /* 1: natural minor against the raised 7th */
+  push(0,'Em','i',Em,[52],[64,67,71],'Home','Home: E minor.',true);
+  push(0,'Bm','v',Bm,[47],[59,62,66],'D natural',(l,r)=>r+': B minor, with D natural. Gentle, in no hurry to go anywhere.');
+  push(0,'B','V',B,[47],[59,63,66],'D♯',(l,r)=>r+': raise the D to D♯ and it becomes B major. Now it leans towards E.');
+  push(0,'Em','i',Em,[52],[59,64,67],'Home again','Back home. The D♯ rose a half step to E.');
+  /* 2: the bass walks down the scale */
+  [['Em','i',Em,52,[59,64,67],'Bass E','The bass starts on the keynote.'],
+   ['Bm/D','v',Bm,50,[59,62,66],'Bass D','B minor with D in the bass. Some scores call this bar D major.'],
+   ['C','VI',Cc,48,[60,64,67],'Bass C','C major. The first bright chord.'],
+   ['G/B','III',G,47,[59,62,67],'Bass B','G major with B in the bass, so the line keeps stepping down.'],
+   ['Am','iv',Am,45,[60,64,69],'Bass A','A minor.'],
+   ['Em/G','i',Em,43,[59,64,67],'Bass G','E minor again, standing on its 3rd this time.'],
+   ['F♯m7♭5','ii',Fs,42,[57,60,64],'Bass F♯','A, C and E over F♯: the darkest bar, one step above the turn for home.'],
+   ['Bsus4','V',B,47,[54,59,64],'Bass B, E held','The bass jumps to B. The E on top has not let go yet.'],
+   ['B','V',B,47,[54,59,63],'Bass B, E falls','E falls to D♯: B major, and the phrase can start again.']]
+    .forEach(([sym,rn,ch,b,rh,short,how],i)=>push(1,sym,rn,ch,[b],rh,short,how,i===0));
+  /* 3: the suspension on its own */
+  push(2,'Bsus4','V',B,[47,54],[59,64],'E held','B and F♯ below, B and E above. The E is the note that is waiting.',true);
+  push(2,'B','V',B,[47,54],[59,63],'E falls to D♯','E falls a half step to D♯. Play it more softly than the note before.');
+  push(2,'Em','i',Em,[40,47],[55,59,64],'Home','Home, with the E back on top.');
+  /* 4: the left hand, opened out past the octave */
+  [['Em','i',Em,[40,47,55]],['Bm/D','v',Bm,[38,47,54]],['C','VI',Cc,[36,43,52]],['G/B','III',G,[47,55,62]],
+   ['Am','iv',Am,[45,52,60]],['Em/G','i',Em,[43,52,59]],['F♯m7♭5','ii',Fs,[42,48,57]],['B','V',B,[47,54,63]]]
+    .forEach(([sym,rn,ch,lh],i)=>push(3,sym,rn,ch,lh,[],'Left hand',l=>l+', bottom to top. '+(i===3?'The line jumps up here so the hand stays in a comfortable part of the piano.':'Roll it up, then back down.'),i===0||i===4));
+  /* 5: one long note over the roll */
+  push(4,'Em','i',Em,[40,47,55],[71],'Balance drill','Hold B on top and roll the left hand under it at half the volume.',true,71);
+  push(4,'C','VI',Cc,[36,43,52],[67],'Balance drill','Hold G on top. The left hand reaches low here; keep it just as quiet.',false,67);
+  push(4,'Am','iv',Am,[45,52,60],[64],'Balance drill','Hold E on top. Listen for the top note still ringing when the roll ends.',false,64);
+  /* 6: the top note over notes in the same hand */
+  push(5,'Em','i',Em,[40,47],[64,67,71],'Voice the top','B is the tune. E and G under it should be barely there.',true,71);
+  push(5,'C','VI',Cc,[36,43],[64,67,72],'Voice the top','C is the tune. Keep E and G down and let the little finger carry it.',false,72);
+  push(5,'B','V',B,[47,54],[63,66,71],'Voice the top','B on top again, over D♯ and F♯.',false,71);
+  /* 7: the middle section leans on VI and VII */
+  push(6,'C','VI',Cc,[36,48],[64,67,72],'Start soft','C major. Begin quietly; there is a long way to climb.',true);
+  push(6,'D','VII',D,[38,50],[66,69,74],'A little more','D major, one step up. Everything rises together.');
+  push(6,'G','III',G,[43,50],[67,71,74],'Brighter','G major. For a moment the piece sounds as if it has left the minor key.');
+  push(6,'Em','i',Em,[40,52],[67,71,76],'Still E minor','E minor, with the right hand at its highest so far.');
+  /* 8: the climax */
+  push(7,'Em','i',Em,[40,52],[64,67,71,76],'Full weight','E in octaves in the left hand, a full chord with the tune doubled in the right.',true);
+  push(7,'C','VI',Cc,[36,48],[64,67,72,76],'Full weight','C in octaves below. Drop the arm; do not push with the fingers.');
+  push(7,'Am','iv',Am,[45,57],[64,69,72,76],'Full weight','A minor. Change the pedal cleanly so the last chord does not hang over.');
+  push(7,'B','V',B,[47,59],[63,66,71,75],'Full weight','B major, D♯ and all. The loudest pull towards home in the piece.');
+  /* 9: the last two chords */
+  push(8,'B','V',B,[47,54],[59,63,66],'Very soft, slowing','B major one last time, as quietly as you can still control.',true);
+  push(8,'Em','i',Em,[40,47],[55,59,64],'Hold and let go','The final E minor. Hold it with the pedal until the sound is gone.');
+  /* 10: each resting note of the tune over its three chords */
+  [[76,[['Em','i',Em,[52],[67,71,76],'root'],['C','VI',Cc,[48],[67,72,76],'3rd'],['Am','iv',Am,[45],[69,72,76],'5th']]],
+   [67,[['G','III',G,[43],[59,62,67],'root'],['Em','i',Em,[52],[59,64,67],'3rd'],['C','VI',Cc,[48],[60,64,67],'5th']]],
+   [71,[['Bm','v',Bm,[47],[62,66,71],'root'],['G','III',G,[43],[62,67,71],'3rd'],['Em','i',Em,[52],[64,67,71],'5th']]],
+   [66,[['F♯°','ii',Fs,[42],[57,60,66],'root'],['D','VII',D,[50],[57,62,66],'3rd'],['Bm','v',Bm,[47],[59,62,66],'5th']]]]
+    .forEach(([T,cs])=>cs.forEach(([sym,rn,ch,lh,rh,tone],i)=>push(9,sym,rn,ch,lh,rh,nn(T,ch)+' is the '+tone,nn(T,ch)+' on top as the '+tone+' of '+sym+'.',i===0,T)));
+  /* 11: a pedal bass, then a rising one */
+  [['Em','i',Em,[40],[59,64,67],'Over a held E','The low E stays for all four bars.'],
+   ['D/E','VII',D,[40],[57,62,66],'Over a held E','D major over E. It floats; nothing is pulling down any more.'],
+   ['C/E','VI',Cc,[40],[60,64,67],'Over a held E','C major with E in the bass.'],
+   ['Am/E','iv',Am,[40],[60,64,69],'Over a held E','A minor over the same E.'],
+   ['Am','iv',Am,[45],[60,64,69],'Bass rises: A','Now the bass climbs instead: A.'],
+   ['Bm','v',Bm,[47],[59,62,66],'Bass rises: B','Up to B.'],
+   ['C','VI',Cc,[48],[60,64,67],'Bass rises: C','Up to C.'],
+   ['D','VII',D,[50],[57,62,66],'Bass rises: D','Up to D, which wants to step on up to E.']]
+    .forEach(([sym,rn,ch,lh,rh,short,how],i)=>push(10,sym,rn,ch,lh,rh,short,how,i===0||i===4));
+  /* 12: a chord and its cousin a third below */
+  [['Em','i',Em,[52],[59,64,67],'From the piece',0],['Cmaj7','VI',Cc,[48],[59,64,67],'Its cousin','The right hand has not moved. Only the bass went down a third, to C.'],
+   ['Am','iv',Am,[45],[60,64,69],'From the piece',0],['F♯m7♭5','ii',Fs,[42],[60,64,69],'Its cousin','The same A, C and E, now over F♯. Darker.'],
+   ['C','VI',Cc,[48],[60,64,67],'From the piece',0],['Am7','iv',Am,[45],[60,64,67],'Its cousin','C, E and G over A. Softer and sadder.'],
+   ['B','V',B,[47],[59,63,66],'From the piece',0],['Bm','v',Bm,[47],[59,62,66],'Its soft twin','D♯ lowered to D natural. The pull towards E minor is gone.']]
+    .forEach(([sym,rn,ch,lh,rh,short,how],i)=>push(11,sym,rn,ch,lh,rh,short,how||((l,r)=>r+' over '+l+'.'),i%2===0));
+  /* 13: tenths above the falling bass */
+  [['Em','i',Em,52,67],['Bm/D','v',Bm,50,66],['C','VI',Cc,48,64],['G/B','III',G,47,62],['Am','iv',Am,45,60],['Em/G','i',Em,43,59],['F♯m7♭5','ii',Fs,42,57],['B','V',B,47,63]]
+    .forEach(([sym,rn,ch,b,t],i)=>push(12,sym,rn,ch,[b],[t],'Second voice',(l,r)=>i===7?'Over the B the line turns up to '+r+', the raised note that leads home.':r+' over '+l+', ten notes apart.',i===0||i===4));
+  /* 14: a loop to write over */
+  [['Em','i',Em,[40,47,55],[59,64]],['C','VI',Cc,[36,43,52],[60,64]],['Am','iv',Am,[45,52,60],[64,69]],['Bsus4','V',B,[47,54],[59,64]],['B','V',B,[47,54],[59,63]]]
+    .forEach(([sym,rn,ch,lh,rh],i)=>push(13,sym,rn,ch,lh,rh,i===3?'E held':i===4?'E falls':'Your loop',i<3?'One bar of the loop. Sing or play your own notes over it.':i===3?'Hold your last note here if it is an E.':'Let it fall, then go round again.',i===0));
+  return steps;
+}
+const LESSONS={intu:LESSON_251,intv:LESSON_IV,zan:LESSON_ZAN};
 /* two notes spelled so the letter count matches the interval's number (C up to E♭ for a minor 3rd, never D♯) */
 function ivSpell(lo,size,key,n,L){
   const mk=(m,l)=>{const a=mod(m-LETTER_PC[l]+6,12)-6;return {step:(Math.floor((m-a)/12)-1)*7+LETTERS.indexOf(l),acc:a,L:l};};
@@ -1548,6 +1680,7 @@ function teachIntervals(o){
 function teachSteps(o){
   if(o.topic==='intu')return teachLesson(o);
   if(o.topic==='intv')return teachIntervals(o);
+  if(o.topic==='zan')return teachZanarkand();
   const sev=o.topic==='shell'||o.src==='dom12'||!!o.sev,pool=teachPool(o.src,o.res),steps=[];
   if(!pool.length)return steps;
   const song=o.src==='song',drill=(o.drill==='top'&&!song)?'each':o.drill;
@@ -1633,7 +1766,7 @@ function teachSteps(o){
   }
   return steps;
 }
-if(typeof module!=='undefined')module.exports={TEACH,teachSteps,LESSON_251,LESSON_IV,LESSONS,invNotes,chordPart,partNotes,parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
+if(typeof module!=='undefined')module.exports={TEACH,teachSteps,LESSON_251,LESSON_IV,LESSON_ZAN,LESSONS,invNotes,chordPart,partNotes,parseMidi,rateParts,songInput,chordAt,skyline,analyze,GENRES,STRATEGIES,HARMONY,noteName,makeKey,pitchOf,decimate,notesFromFrames,hzToMidi,splitDur,quantize,keySig,spell,spellChord,fingering,cleanMelody,detectMeter};
 </script>
 
 <script>
@@ -2692,13 +2825,13 @@ function teachControls(){
     '<optgroup label="All twelve keys"><option value="maj12">Major chords</option><option value="min12">Minor chords</option><option value="dom12">Dominant 7ths</option></optgroup>';
   $('tSrc').value=TM.src;
   const les=!!LESSONS[TM.topic];
-  $('tSrcWrap').hidden=les;$('tLKeyWrap').hidden=!les;$('tLKey').value=TM.lkey;
+  $('tSrcWrap').hidden=les;$('tLKeyWrap').hidden=!les||TM.topic==='zan';$('tLKey').value=TM.lkey;
   $('tSizeWrap').hidden=les||TM.topic==='shell'||TM.src==='dom12';$('tSize').value=TM.size;
   $('tHandWrap').hidden=!(TM.topic==='inv'&&TM.drill==='each');$('tHand').value=TM.hand;
   $('tOrderWrap').hidden=les||TM.drill==='lead';$('tOrder').value=TM.order;
   $('tAbout').textContent=tp.drills[TM.drill].about+(TM.topic==='shell'&&song?' Chords the song plays as plain triads are given the 7th that belongs to the key.':'');
   const n=song&&has?new Set(R.segs.map(s=>s.chord.id)).size:0;
-  if(les){const k=makeKey(mod(TM.lkey|0,12),'major'),c=(o,f)=>symbol({root:mod(k.tonic+o,12),fam:f,kind:'d'},k,false);$('tSrcLine').textContent=TM.topic==='intv'?'A lesson on the twelve intervals, measured from the keynote of '+k.label+'.':'A lesson on one 2-5-1 in '+k.label+': '+c(2,'min')+', '+c(7,'dom')+', '+c(0,'maj')+'.';}
+  if(les){const k=makeKey(mod(TM.lkey|0,12),'major'),c=(o,f)=>symbol({root:mod(k.tonic+o,12),fam:f,kind:'d'},k,false);$('tSrcLine').textContent=TM.topic==='zan'?'A lesson on To Zanarkand in E minor: how it is built, how to play it, and how to write against its melody.':TM.topic==='intv'?'A lesson on the twelve intervals, measured from the keynote of '+k.label+'.':'A lesson on one 2-5-1 in '+k.label+': '+c(2,'min')+', '+c(7,'dom')+', '+c(0,'maj')+'.';}
   else $('tSrcLine').textContent=song?(has?'Built from '+cur+' · '+R.key.label+' · '+n+' different chord'+(n===1?'':'s'):'No melody loaded yet.'):'Built from all twelve keys, going round the circle of fifths.';
 }
 /* the step's keyboard: every key can be tapped; placements and finger numbers can be hidden */
@@ -2869,7 +3002,7 @@ function teachRender(){
   $('tPeek').hidden=!hidden.length;$('tPeek').textContent=TM.peek?'Hide again':'Peek';$('tPeek').setAttribute('aria-pressed',TM.peek);
   const LS=LESSONS[TM.topic]||LESSON_251,idea=st.idea!=null?LS[st.idea]:null,d=idea||TEACH[TM.topic].drills[TM.drill];
   $('tCoach').innerHTML='<div class="tcoach"><div>'+(idea?'<h3>Idea '+(st.idea+1)+' of '+LS.length+': '+esc(idea.title)+'</h3><p class="tthink">'+esc(idea.think)+'</p><h3>Try this</h3><ol>':'<h3>How to practise this step</h3><ol>')+d.how.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol></div>'+
-    '<div><h3>Make it yours</h3><p>'+esc((TM.topic==='intv'?TEACH_IDEAS_IV:TEACH_IDEAS)[TM.i%TEACH_IDEAS.length])+'</p>'+
+    '<div><h3>Make it yours</h3><p>'+esc((TM.topic==='intv'?TEACH_IDEAS_IV:TM.topic==='zan'?TEACH_IDEAS_ZAN:TEACH_IDEAS)[TM.i%TEACH_IDEAS.length])+'</p>'+
     (TM.plan?'<h3>From Claude</h3><p>'+esc(TM.plan.plan)+'</p>'+(TM.plan.steps.length?'<ol>'+TM.plan.steps.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ol>':''):'')+'</div></div>';
 }
 const tHeld=new Set();
